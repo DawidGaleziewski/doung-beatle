@@ -1,0 +1,146 @@
+import { symlinkSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { ConfigError, loadPersona } from '../src/index.js';
+import { tmpTree } from './helpers.js';
+
+const MIXIN = `
+auth: none
+max_action_class: read
+consent: { decline_location: true, decline_marketing: true }
+viewport: { width: 1366, height: 768 }
+locale: pl-PL
+scope_restrictions: { allowed_paths: ["/a/*", "/b/*"] }
+`;
+
+describe('persona extends', () => {
+  it('resolves a persona with no extends', () => {
+    const root = tmpTree({ 'guest.yaml': `id: guest\n${MIXIN}` });
+    const p = loadPersona(join(root, 'guest.yaml'));
+    expect(p).toMatchObject({
+      id: 'guest',
+      auth: 'none',
+      locale: 'pl-PL',
+      max_action_class: 'read',
+    });
+  });
+
+  it('applies a mixin from personas/_mixins first and the target last', () => {
+    const root = tmpTree({
+      'personas/_mixins/anonymous-base.yaml': MIXIN,
+      'personas/portal/guest.yaml': `id: guest\nextends: ["../_mixins/anonymous-base.yaml"]\nlocale: en-GB\nconsent: { decline_location: false }\n`,
+    });
+    const p = loadPersona(join(root, 'personas/portal/guest.yaml'));
+    expect(p.locale).toBe('en-GB');
+    expect(p.viewport).toEqual({ width: 1366, height: 768 });
+    // objects merge field by field; the target overrides only what it declares
+    expect(p.consent).toEqual({ decline_location: false, decline_marketing: true });
+  });
+
+  it('later extends entries override earlier ones', () => {
+    const root = tmpTree({
+      'a.yaml': 'locale: pl-PL\nviewport: { width: 100, height: 100 }\n',
+      'b.yaml': 'locale: de-DE\n',
+      'p.yaml': 'id: p\nextends: [a.yaml, b.yaml]\n',
+      'q.yaml': 'id: q\nextends: [b.yaml, a.yaml]\n',
+    });
+    expect(loadPersona(join(root, 'p.yaml')).locale).toBe('de-DE');
+    expect(loadPersona(join(root, 'q.yaml')).locale).toBe('pl-PL');
+  });
+
+  it('resolves depth-first through nested extends', () => {
+    const root = tmpTree({
+      'base.yaml': 'locale: pl-PL\nviewport: { width: 1, height: 1 }\n',
+      'mid.yaml': 'extends: [base.yaml]\nviewport: { width: 2, height: 2 }\n',
+      'top.yaml': 'id: top\nextends: [mid.yaml]\n',
+    });
+    const p = loadPersona(join(root, 'top.yaml'));
+    expect(p.viewport).toEqual({ width: 2, height: 2 });
+    expect(p.locale).toBe('pl-PL');
+  });
+
+  it('replaces arrays explicitly instead of concatenating', () => {
+    const root = tmpTree({
+      'base.yaml':
+        'locale: x\nviewport: { width: 1, height: 1 }\nscope_restrictions: { allowed_paths: ["/a/*", "/b/*"] }\n',
+      'p.yaml': 'id: p\nextends: [base.yaml]\nscope_restrictions: { allowed_paths: ["/c/*"] }\n',
+    });
+    expect(loadPersona(join(root, 'p.yaml')).scope_restrictions.allowed_paths).toEqual(['/c/*']);
+  });
+
+  it('defaults to no auth and the read ceiling', () => {
+    const root = tmpTree({ 'p.yaml': 'id: p\nviewport: { width: 1, height: 1 }\nlocale: pl-PL\n' });
+    expect(loadPersona(join(root, 'p.yaml'))).toMatchObject({
+      auth: 'none',
+      max_action_class: 'read',
+    });
+  });
+});
+
+describe('persona fence (spec 002 FR-024, FR-025)', () => {
+  const fenced = (root: string, portal: string) => ({
+    fence: [join(root, 'personas/_mixins'), join(root, `personas/${portal}`)],
+  });
+  const tree = () =>
+    tmpTree({
+      'personas/_mixins/anonymous-base.yaml': MIXIN,
+      'personas/insuro/_mixins/pl.yaml': 'locale: pl-PL\n',
+      'personas/bazaar-lokalnie/guest.yaml': `id: guest\n${MIXIN}`,
+      'personas/insuro/ok.yaml':
+        'id: ok\nextends: ["../_mixins/anonymous-base.yaml", "_mixins/pl.yaml"]\n',
+      'personas/insuro/cross.yaml': 'id: cross\nextends: ["../bazaar-lokalnie/guest.yaml"]\n',
+      'personas/insuro/escape.yaml': 'id: escape\nextends: ["../../outside.yaml"]\n',
+      'outside.yaml': MIXIN,
+    });
+
+  it('allows shared mixins and the portal own mixins', () => {
+    const root = tree();
+    const p = loadPersona(join(root, 'personas/insuro/ok.yaml'), fenced(root, 'insuro'));
+    expect(p).toMatchObject({ id: 'ok', locale: 'pl-PL', auth: 'none' });
+  });
+
+  it('refuses extending another portal, naming both files', () => {
+    const root = tree();
+    let err: ConfigError | undefined;
+    try {
+      loadPersona(join(root, 'personas/insuro/cross.yaml'), fenced(root, 'insuro'));
+    } catch (e) {
+      err = e as ConfigError;
+    }
+    expect(err).toBeInstanceOf(ConfigError);
+    expect(err!.file).toBe(join(root, 'personas/insuro/cross.yaml'));
+    expect(err!.message).toContain('extends "../bazaar-lokalnie/guest.yaml"');
+    expect(err!.message).toContain(join(root, 'personas/bazaar-lokalnie/guest.yaml'));
+    expect(err!.message).toContain('leaves the allowed folders');
+  });
+
+  it('refuses a .. path out of both roots and a symlink pointing outside', () => {
+    const root = tree();
+    expect(() =>
+      loadPersona(join(root, 'personas/insuro/escape.yaml'), fenced(root, 'insuro')),
+    ).toThrow(/leaves the allowed folders/);
+    symlinkSync(join(root, 'outside.yaml'), join(root, 'personas/insuro/_mixins/link.yaml'));
+    writeFileSync(
+      join(root, 'personas/insuro/sym.yaml'),
+      'id: sym\nextends: ["_mixins/link.yaml"]\n',
+    );
+    expect(() => loadPersona(join(root, 'personas/insuro/sym.yaml'), fenced(root, 'insuro'))).toThrow(
+      /leaves the allowed folders/,
+    );
+  });
+
+  it('checks nested extends too', () => {
+    const root = tree();
+    writeFileSync(
+      join(root, 'personas/insuro/_mixins/bad.yaml'),
+      'extends: ["../../bazaar-lokalnie/guest.yaml"]\n',
+    );
+    writeFileSync(
+      join(root, 'personas/insuro/nested.yaml'),
+      'id: nested\nextends: ["_mixins/bad.yaml"]\n',
+    );
+    expect(() =>
+      loadPersona(join(root, 'personas/insuro/nested.yaml'), fenced(root, 'insuro')),
+    ).toThrow(/leaves the allowed folders/);
+  });
+});

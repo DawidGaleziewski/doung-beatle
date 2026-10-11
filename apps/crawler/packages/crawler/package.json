@@ -1,0 +1,20 @@
+{
+  "name": "@beetle/crawler",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Browser runtime library used in-process by mcp-server: gates, session, stabilizer, observer, frontier",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@beetle/config": "workspace:*",
+    "@beetle/core": "workspace:*",
+    "@beetle/store": "workspace:*",
+    "@beetle/fingerprint": "workspace:*",
+    "@beetle/obstacles": "workspace:*",
+    "@beetle/safety": "workspace:*",
+    "pino": "^10.3.1",
+    "playwright": "^1.63.0"
+  }
+}

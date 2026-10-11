@@ -1,0 +1,23 @@
+{
+  "name": "@beetle/store",
+  "version": "0.0.0",
+  "private": true,
+  "description": "SQLite access (Kysely), table types, migrations runner, audit, portal export/delete, and the two DB writers every server shares: the decision log and the tracer",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@beetle/chat-model": "workspace:*",
+    "@beetle/core": "workspace:*",
+    "@beetle/docs-model": "workspace:*",
+    "@beetle/trace": "workspace:*",
+    "better-sqlite3": "^13.0.3",
+    "kysely": "^0.29.6",
+    "pino": "^10.3.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0"
+  }
+}

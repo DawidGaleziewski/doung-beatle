@@ -1,0 +1,17 @@
+{
+  "name": "crawler",
+  "description": "Maps a portal or traces one named process through the beetle MCP server as a guest or logged-in persona, recording states, transitions, forms and API shapes or the steps of one process, with evidence, plus a worklist of what it skipped. Use to map a portal or trace a named process; never interprets business intent or tests.",
+  "prompt": "file://../prompts/crawler.md",
+  "includeMcpJson": true,
+  "tools": [
+    "@beetle/start_run",
+    "@beetle/get_known_states",
+    "@beetle/get_next_frontier_item",
+    "@beetle/navigate",
+    "@beetle/act",
+    "@beetle/login",
+    "@beetle/add_open_question",
+    "@beetle/add_rule_candidate",
+    "@beetle/finish_run"
+  ]
+}

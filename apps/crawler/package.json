@@ -1,0 +1,43 @@
+{
+  "name": "beetle-ai",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@12.5.1",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "pnpm --filter \"./packages/*\" exec tsc --noEmit && tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "vault": "tsx scripts/vault.ts",
+    "audit:pii": "tsx scripts/pii-audit.ts",
+    "portal:export": "tsx scripts/portal-export.ts",
+    "portal:delete": "tsx scripts/portal-delete.ts",
+    "portal:check": "tsx scripts/portal-check.ts",
+    "docs:audit": "tsx scripts/docs-audit.ts",
+    "docs:review": "tsx scripts/docs-review.ts",
+    "docs:export": "tsx scripts/docs-export.ts",
+    "wireframes:build": "tsx scripts/wireframes-build.ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@beetle/config": "workspace:*",
+    "@beetle/core": "workspace:*",
+    "@beetle/docs": "workspace:*",
+    "@beetle/mcp-server": "workspace:*",
+    "@beetle/store": "workspace:*",
+    "@beetle/vault": "workspace:*",
+    "@types/node": "^22.20.4",
+    "eslint": "^10.11.0",
+    "prettier": "^3.9.8",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.70.1",
+    "vitest": "^5.0.1",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.5"
+  }
+}

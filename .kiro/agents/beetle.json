@@ -1,0 +1,73 @@
+{
+  "name": "beetle",
+  "description": "Main agent: sets up portals and personas, runs the documentation commands, and delegates browsing to crawler, documenting to ba and issue writing to reporter.",
+  "prompt": "file://../prompts/beetle.md",
+  "includeMcpJson": true,
+  "tools": [
+    "read",
+    "write",
+    "shell",
+    "subagent"
+  ],
+  "permissions": {
+    "rules": [
+      {
+        "capability": "fs_write",
+        "match": [
+          "portals/**",
+          "personas/**"
+        ],
+        "exclude": [
+          "personas/_mixins/**"
+        ],
+        "effect": "allow"
+      },
+      {
+        "capability": "fs_write",
+        "match": [
+          "**"
+        ],
+        "exclude": [
+          "portals/**",
+          "personas/**"
+        ],
+        "effect": "deny"
+      },
+      {
+        "capability": "shell",
+        "match": [
+          "pnpm --dir apps/crawler portal:check *",
+          "pnpm --dir apps/crawler vault list*",
+          "pnpm --dir apps/crawler vault check *",
+          "pnpm --dir apps/crawler docs:export *",
+          "pnpm --dir apps/crawler docs:audit*",
+          "pnpm --dir apps/crawler wireframes:build *",
+          "git status*",
+          "git log*"
+        ],
+        "effect": "allow"
+      },
+      {
+        "capability": "shell",
+        "match": [
+          "pnpm --dir apps/crawler vault reveal*",
+          "pnpm --dir apps/crawler vault set*"
+        ],
+        "effect": "deny"
+      },
+      {
+        "capability": "shell",
+        "match": [
+          "*"
+        ],
+        "effect": "ask"
+      }
+    ]
+  },
+  "resources": [
+    "file://.kiro/steering/beetle.md",
+    "skill://.kiro/skills/create-portal/SKILL.md",
+    "skill://.kiro/skills/create-persona/SKILL.md"
+  ],
+  "welcomeMessage": "Which portal shall we document?"
+}

@@ -1,0 +1,114 @@
+import { existsSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { ConfigError, loadEffectiveConfig, type EffectiveConfig } from '@beetle/config';
+import { EnvGuardError, assertRunAllowed, narrowScope, type RunScope } from '@beetle/safety';
+import type { Environment } from '@beetle/config';
+
+export type PreflightRefusalCode = 'ENV_GUARD_REFUSED' | 'CONFIG_INVALID';
+
+export type PreflightResult =
+  | {
+      ok: true;
+      effective: EffectiveConfig;
+      /** Portal scope narrowed by the persona (and later by the scan's focus); what the gates enforce. */
+      scope: RunScope;
+      portalPath: string;
+      personaPath: string;
+    }
+  | { ok: false; code: PreflightRefusalCode; message: string; reasons: string[] };
+
+export interface PreflightOptions {
+  /** Repo root that holds `portals/` and `personas/`. */
+  root: string;
+  /** Which of the portal's environments the run targets (spec 011 FR-008, FR-009). */
+  environment?: Environment;
+}
+
+const SLUG = /^[a-z0-9][a-z0-9_-]*$/;
+
+/** Find `<personaId>.yaml` under `personas/<portalId>/`, directly or in a `<process>/` subfolder. */
+function findPersona(dir: string, personaId: string): string | null {
+  if (!existsSync(dir)) return null;
+  const direct = join(dir, `${personaId}.yaml`);
+  if (existsSync(direct)) return direct;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory() && !entry.name.startsWith('_')) {
+      const found = findPersona(join(dir, entry.name), personaId);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+const refuse = (code: PreflightRefusalCode, reasons: string[]): PreflightResult => ({
+  ok: false,
+  code,
+  message: reasons.join('; '),
+  reasons,
+});
+
+/**
+ * Called first by `start_run`, BEFORE any browser is launched or request made (SC-006). Synchronous
+ * and file-only: loads config for the chosen environment, applies the environment guard and, for
+ * production, refuses a placeholder User-Agent (FR-026; the compliance dates are no longer
+ * required since constitution 4.0.0).
+ */
+export function preflight(
+  portalId: string,
+  personaId: string,
+  opts: PreflightOptions,
+): PreflightResult {
+  if (!SLUG.test(portalId))
+    return refuse('CONFIG_INVALID', [`invalid portal id: ${JSON.stringify(portalId)}`]);
+  if (!SLUG.test(personaId))
+    return refuse('CONFIG_INVALID', [`invalid persona id: ${JSON.stringify(personaId)}`]);
+
+  const portalPath = join(opts.root, 'portals', portalId, 'portal.yaml');
+  const personaPath = findPersona(join(opts.root, 'personas', portalId), personaId);
+  if (personaPath === null) {
+    return refuse('CONFIG_INVALID', [
+      `persona "${personaId}" not found under personas/${portalId}/`,
+    ]);
+  }
+
+  let effective: EffectiveConfig;
+  try {
+    // A persona may extend shared mixins and its own portal's files only (spec 002 FR-025).
+    effective = loadEffectiveConfig(
+      portalPath,
+      personaPath,
+      { fence: [join(opts.root, 'personas', '_mixins'), join(opts.root, 'personas', portalId)] },
+      opts.environment,
+    );
+  } catch (e) {
+    if (e instanceof ConfigError) return refuse('CONFIG_INVALID', [e.message]);
+    throw e;
+  }
+  const { portal, persona } = effective;
+
+  try {
+    assertRunAllowed(portal, persona);
+  } catch (e) {
+    if (e instanceof EnvGuardError) return refuse('ENV_GUARD_REFUSED', e.reasons);
+    throw e;
+  }
+
+  // Production traffic must be identifiable (constitution 4.0.0). The compliance review dates
+  // are no longer required: that review is the BA's (spec 011 phase 2).
+  if (
+    portal.environment === 'production' &&
+    portal.rate_limit?.user_agent.toLowerCase().includes('example.com')
+  ) {
+    return refuse('ENV_GUARD_REFUSED', [
+      `rate_limit.user_agent in ${portalPath} still holds the placeholder contact address (FR-026)`,
+    ]);
+  }
+
+  return {
+    ok: true,
+    effective,
+    scope: narrowScope(portal.scope, persona.scope_restrictions, persona.budgets),
+    portalPath,
+    personaPath,
+  };
+}

@@ -1,0 +1,43 @@
+{
+  "name": "reporter",
+  "description": "Writes one issue file in issues/ for a problem found while documenting a portal (stuck or refused runs, missing or wrong documentation, setup trouble). Never fixes anything.",
+  "prompt": "file://../prompts/reporter.md",
+  "includeMcpJson": true,
+  "tools": [
+    "read",
+    "write",
+    "@beetle-ba/list_runs",
+    "@beetle-ba/get_run_evidence",
+    "@beetle-ba/get_evidence",
+    "@beetle-ba/list_records",
+    "@beetle-ba/get_record"
+  ],
+  "permissions": {
+    "rules": [
+      {
+        "capability": "fs_write",
+        "match": [
+          "issues/**"
+        ],
+        "exclude": [
+          "issues/TEMPLATE.md",
+          "issues/README.md"
+        ],
+        "effect": "allow"
+      },
+      {
+        "capability": "fs_write",
+        "match": [
+          "**"
+        ],
+        "exclude": [
+          "issues/**"
+        ],
+        "effect": "deny"
+      }
+    ]
+  },
+  "resources": [
+    "file://issues/TEMPLATE.md"
+  ]
+}

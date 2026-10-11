@@ -1,0 +1,23 @@
+{
+  "name": "@beetle/docs",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Layer B documentation core: keys, status engine, observed rule, relations, evidence resolution, audit, SRS rendering",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing/index.ts"
+  },
+  "dependencies": {
+    "@beetle/core": "workspace:*",
+    "@beetle/docs-model": "workspace:*",
+    "@beetle/store": "workspace:*",
+    "kysely": "^0.29.6",
+    "pngjs": "^7.0.0",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/pngjs": "^6.0.5"
+  }
+}

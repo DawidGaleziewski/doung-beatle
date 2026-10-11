@@ -1,0 +1,34 @@
+{
+  "mcpServers": {
+    "beetle": {
+      "command": "pnpm",
+      "args": [
+        "--dir",
+        "apps/crawler",
+        "--filter",
+        "@beetle/mcp-server",
+        "start"
+      ],
+      "env": {
+        "BEETLE_ENV": "production"
+      },
+      "timeout": 120000,
+      "requestTimeout": 600000
+    },
+    "beetle-ba": {
+      "command": "pnpm",
+      "args": [
+        "--dir",
+        "apps/crawler",
+        "--filter",
+        "@beetle/mcp-server",
+        "start:ba"
+      ],
+      "env": {
+        "BEETLE_ENV": "production"
+      },
+      "timeout": 120000,
+      "requestTimeout": 600000
+    }
+  }
+}

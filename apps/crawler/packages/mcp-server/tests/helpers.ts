@@ -1,0 +1,104 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { afterEach } from 'vitest';
+import { createEvidenceStore, createLogger, newId, nowIso } from '@beetle/core';
+import {
+  createDecisionLog,
+  createTracer,
+  linkDecisions,
+  migrateUp,
+  openDb,
+  type OpenedDb,
+  type TracerDeps,
+} from '@beetle/store';
+import type { ServerContext } from '../src/context.js';
+
+const MIGRATIONS = fileURLToPath(new URL('../../../../../data/migrations', import.meta.url));
+
+const cleanups: (() => Promise<void> | void)[] = [];
+afterEach(async () => {
+  for (const c of cleanups.splice(0)) await c();
+});
+
+/** Tracer options for a test context: fixed clock/ids for golden tests, or a level. */
+export type TraceOverrides = Partial<Pick<TracerDeps, 'now' | 'monotonic' | 'newId' | 'level'>>;
+
+export async function makeCtx(
+  trace: TraceOverrides = {},
+): Promise<ServerContext & { dir: string; opened: OpenedDb }> {
+  const dir = mkdtempSync(join(tmpdir(), 'pf-mcp-'));
+  const opened = openDb(':memory:');
+  migrateUp(opened.raw, MIGRATIONS);
+  const logger = createLogger({ level: 'silent' });
+  const evidence = createEvidenceStore(join(dir, 'evidence'));
+  const tracer = createTracer({ db: opened.db, logger, evidence, level: 'standard', ...trace });
+  await tracer.start({
+    environment: 'sandbox',
+    server: 'beetle',
+    version: 'test',
+    pwTrace: 'non_production',
+  });
+  cleanups.push(async () => {
+    await tracer.shutdown();
+    await opened.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+  return {
+    db: opened.db,
+    raw: opened.raw,
+    evidence,
+    decisions: linkDecisions(createDecisionLog(opened.db, logger), tracer),
+    logger,
+    tracer,
+    pwTrace: 'non_production',
+    root: dir,
+    dbEnvironment: 'production',
+    // No test reaches the network: robots.txt answers 404 (no rules) unless a test overrides it.
+    fetch: async () => new Response('', { status: 404 }),
+    dir,
+    opened,
+  };
+}
+
+export async function seedRun(
+  ctx: ServerContext,
+  over: Partial<{
+    environment: string;
+    status: 'running' | 'completed' | 'stopped_warning' | 'interrupted';
+    warning: string | null;
+    scope: object;
+    portal: string;
+  }> = {},
+): Promise<string> {
+  const id = newId();
+  await ctx.db
+    .insertInto('runs')
+    .values({
+      id,
+      portal_id: over.portal ?? 'shop',
+      persona_id: 'guest',
+      mode: 'map',
+      environment: over.environment ?? 'production',
+      env_version_or_date: '2026-09-23',
+      seed_id: null,
+      viewport: '1366x768',
+      locale: 'pl-PL',
+      browser: 'chromium',
+      config_snapshot: JSON.stringify({ scope: over.scope ?? {} }),
+      status: over.status ?? 'running',
+      warning: over.warning ?? null,
+      steps_used: 0,
+      elapsed_ms: 0,
+      max_depth_reached: 0,
+      started_at: nowIso(),
+      ended_at: null,
+      coverage: null,
+    })
+    .execute();
+  return id;
+}
+
+export const REF = 'a'.repeat(64) + '.yaml';
+export const FP = (c: string) => c.repeat(64);

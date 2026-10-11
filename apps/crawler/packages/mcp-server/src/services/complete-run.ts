@@ -1,0 +1,124 @@
+import { RunStatus, nowIso } from '@beetle/core';
+import { emitForRun } from '@beetle/store';
+import { z } from 'zod';
+import type { ServerContext } from '../context.js';
+import { ToolError, parseInput } from '../errors.js';
+import { computeCoverage, type Coverage } from '@beetle/crawler';
+import { getRun, type RunRow } from './common.js';
+import { isBudgetExhausted } from './run-budget.js';
+import { robotsCoverage } from './robots.js';
+import { closeProcess, processOfRun } from './trace.js';
+
+/** Live robots counters of the request gate, when the session is still open. */
+export type LiveRobotsStats = { pageRequestsBlocked: number; pageRequestsAllowed: number };
+
+function itemTemplatesOf(run: RunRow): string[] {
+  try {
+    return (
+      (JSON.parse(run.config_snapshot) as { portal?: { item_route_templates?: string[] } }).portal
+        ?.item_route_templates ?? []
+    );
+  } catch {
+    return [];
+  }
+}
+
+const CompleteRunInput = z
+  .object({
+    run_id: z.string().min(1),
+    status: RunStatus.exclude(['running']),
+    warning: z.string().min(1).nullable().default(null),
+  })
+  .strict();
+
+/** Server-internal: computes coverage and sets the final status. The agent never calls this. */
+export async function completeRun(ctx: ServerContext, raw: unknown, live?: LiveRobotsStats) {
+  const input = parseInput(CompleteRunInput, raw);
+  const run = await getRun(ctx, input.run_id);
+  if (input.status === 'stopped_warning' && input.warning === null) {
+    throw new ToolError('SCHEMA_INVALID', 'warning is required when status is stopped_warning');
+  }
+  const coverage = {
+    ...(await computeCoverage(ctx.db, run.id, itemTemplatesOf(run))),
+    robots: await robotsCoverage(ctx, run.id, live),
+  };
+  await ctx.db
+    .updateTable('runs')
+    .set({
+      status: input.status,
+      warning: input.warning ?? run.warning,
+      ended_at: nowIso(),
+      coverage: JSON.stringify(coverage),
+    })
+    .where('id', '=', run.id)
+    .execute();
+  emitForRun(ctx.tracer, run.id, 'run_status', {
+    status: input.status,
+    steps_used: run.steps_used,
+    elapsed_ms: run.elapsed_ms,
+    max_depth_reached: run.max_depth_reached,
+  });
+  return { run_id: run.id, status: input.status, coverage };
+}
+
+/**
+ * Agent-facing `finish_run`: only requests completion. The server verifies the frontier is empty or a
+ * budget is exhausted; the agent can never set `status` or `warning`.
+ */
+export async function finishRun(ctx: ServerContext, raw: unknown, live?: LiveRobotsStats) {
+  const input = parseInput(
+    z
+      .object({
+        run_id: z.string().min(1),
+        summary: z.string().max(4000).optional(),
+        outcome: z.enum(['goal_reached', 'abandoned']).optional(),
+        observed_result: z.string().trim().min(1).max(1000).optional(),
+      })
+      .strict(),
+    raw,
+  );
+  const run = await getRun(ctx, input.run_id);
+  const proc = await processOfRun(ctx, run.id);
+  if (proc) {
+    // Trace run (spec 004 R-14): no frontier is used, the agent states the outcome it observed.
+    if (input.outcome === undefined || input.observed_result === undefined)
+      throw new ToolError(
+        'SCHEMA_INVALID',
+        'outcome and observed_result are required to finish a trace run',
+      );
+    if (run.status !== 'running') return finishedRun(ctx, run);
+    await closeProcess(ctx, proc.id, {
+      outcome: input.outcome,
+      observed_result: input.observed_result,
+      blocked_reason: `abandoned: ${input.observed_result}`,
+    });
+    return completeRun(ctx, { run_id: run.id, status: 'completed' }, live);
+  }
+  if (input.outcome !== undefined || input.observed_result !== undefined)
+    throw new ToolError('SCHEMA_INVALID', 'outcome and observed_result are for trace runs only');
+  if (run.status !== 'running') return finishedRun(ctx, run);
+  const pending = await ctx.db
+    .selectFrom('frontier')
+    .select((eb) => eb.fn.countAll<number>().as('n'))
+    .where('run_id', '=', run.id)
+    .where('status', '=', 'pending')
+    .executeTakeFirstOrThrow();
+  if (Number(pending.n) > 0 && !(await isBudgetExhausted(ctx, run))) {
+    throw new ToolError(
+      'FRONTIER_NOT_EMPTY',
+      `${Number(pending.n)} frontier items are still pending and no budget is exhausted`,
+    );
+  }
+  return completeRun(ctx, { run_id: run.id, status: 'completed' }, live);
+}
+
+/** A run that already ended (block, boundary, earlier finish): report it, never change it. */
+async function finishedRun(ctx: ServerContext, run: RunRow) {
+  return {
+    run_id: run.id,
+    status: run.status,
+    coverage: run.coverage
+      ? (JSON.parse(run.coverage) as Coverage)
+      : await computeCoverage(ctx.db, run.id, itemTemplatesOf(run)),
+  };
+}

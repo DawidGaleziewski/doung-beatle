@@ -1,0 +1,107 @@
+import { FingerprintIndex } from '@beetle/fingerprint';
+import { inferRouteTemplates, type RouteTemplater } from '@beetle/fingerprint';
+import type { EffectiveConfig } from '@beetle/config';
+import { FrontierPolicy, type BrowserSession, type MountWait } from '@beetle/crawler';
+import { portalRuleSet, type RuleSet, type RunScope } from '@beetle/safety';
+import type { RunRobots } from '../services/robots.js';
+import type { PwTrace } from './pw-trace.js';
+import type { RunTraceHooks } from './trace-hooks.js';
+
+/** In-memory, per-run browser-side state. Everything durable lives in the database. */
+export class RunState {
+  readonly index = new FingerprintIndex();
+  readonly policy: FrontierPolicy;
+  /** Built once per run from the portal file; every classification of this run uses it. */
+  readonly ruleSet: RuleSet;
+  readonly depthByState = new Map<string, number>();
+  /** The shallowest depth each URL was observed at, so `navigate` back to it keeps that depth. */
+  readonly depthByUrl = new Map<string, number>();
+  private readonly urls: string[] = [];
+  private templater: RouteTemplater | null = null;
+  currentStateId: string | null = null;
+  currentUrl: string | null = null;
+  /** Per-call Playwright trace chunks; null when not recorded for this run (research §13). */
+  pw: PwTrace | null = null;
+  /** Resolves when a detected block has been persisted; undefined until one is detected. */
+  stopPersisted: Promise<void> | undefined;
+  /** `session.obstacles.events` already reported for the current call (research §16). */
+  obstacleCursor = 0;
+  /** Trace runs (spec 004 R-14): the run's process; null for map runs. */
+  processId: string | null = null;
+  /** The page as last observed, compared with the next one for a trace step's outcomes. */
+  lastObserved: { url: string; title: string; snapshot: string } | null = null;
+  /** The mount wait of the latest settle (spec 015 R4), for the page composition. */
+  lastMounts: MountWait | null = null;
+  /** States already handed to a human for a CAPTCHA in this run (spec 009 FR-022). */
+  readonly handoffs = new Set<string>();
+  /**
+   * Server-side login (spec 009 FR-018, FR-020): `blocked` after any failure, so a wrong
+   * password is tried once per run (lockout guard); `logged_in` arms re-login on expiry.
+   */
+  login: 'none' | 'logged_in' | 'blocked' = 'none';
+  /** True while the server itself is logging in, so the login page is not a trace step. */
+  loggingIn = false;
+
+  get isTrace(): boolean {
+    return this.processId !== null;
+  }
+
+  constructor(
+    readonly runId: string,
+    readonly session: BrowserSession,
+    readonly effective: EffectiveConfig,
+    readonly scope: RunScope,
+    readonly robots: RunRobots,
+    /** Request-level trace events of this run's browser (spec 005). */
+    readonly trace: RunTraceHooks,
+  ) {
+    const { portal } = effective;
+    this.ruleSet = portalRuleSet(portal);
+    this.policy = new FrontierPolicy({
+      itemRouteTemplates: portal.item_route_templates,
+      ...(portal.item_view_cap !== undefined ? { itemViewCap: portal.item_view_cap } : {}),
+    });
+  }
+
+  /**
+   * Route template for a URL. A template the portal lists in `item_route_templates` (`/oferta/:id`) wins
+   * for any URL it matches; otherwise it is inferred from every URL seen so far (research §2).
+   */
+  routeTemplateFor(url: string): string {
+    const item = this.itemTemplateOf(url);
+    if (item) return item;
+    if (!this.urls.includes(url)) {
+      this.urls.push(url);
+      this.templater = null;
+    }
+    this.templater ??= inferRouteTemplates(this.urls);
+    return this.templater.templateFor(url);
+  }
+
+  /**
+   * Route template for trace URL shaping only: never adds the URL to the inference set, so tracing
+   * cannot change the templates the crawl records (FR-014).
+   */
+  peekRouteTemplate(url: string): string {
+    const item = this.itemTemplateOf(url);
+    if (item) return item;
+    this.templater ??= inferRouteTemplates(this.urls);
+    return this.templater.templateFor(url);
+  }
+
+  private itemTemplateOf(url: string): string | undefined {
+    const path = new URL(url).pathname;
+    for (const t of this.effective.portal.item_route_templates) {
+      const re = new RegExp(
+        `^${t
+          .split('/')
+          .map((seg) =>
+            seg.startsWith(':') ? '[^/]+' : seg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+          )
+          .join('/')}$`,
+      );
+      if (re.test(path)) return t;
+    }
+    return undefined;
+  }
+}

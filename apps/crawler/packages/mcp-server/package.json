@@ -1,0 +1,33 @@
+{
+  "name": "@beetle/mcp-server",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The `beetle` stdio MCP server: the crawler subagent's only tools",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@beetle/config": "workspace:*",
+    "@beetle/core": "workspace:*",
+    "@beetle/docs-model": "workspace:*",
+    "@beetle/trace": "workspace:*",
+    "@beetle/store": "workspace:*",
+    "@beetle/crawler": "workspace:*",
+    "@beetle/fingerprint": "workspace:*",
+    "@beetle/obstacles": "workspace:*",
+    "@beetle/safety": "workspace:*",
+    "@beetle/vault": "workspace:*",
+    "@beetle/wireframe": "workspace:*",
+    "zod": "^4.6.5",
+    "@beetle/docs": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15"
+  },
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "start:ba": "tsx src/ba-main.ts"
+  }
+}

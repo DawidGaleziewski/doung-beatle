@@ -1,0 +1,48 @@
+{
+  "name": "ba",
+  "description": "Documents a portal from recorded crawl evidence into keyed, evidence-linked documentation records (screens, requirements, rules, data items, glossary, questions) through the beetle-ba server. Use when a portal's runs should be analysed or reviewer feedback answered. Never browses; not for crawling, testing or UI work.",
+  "prompt": "file://../prompts/ba.md",
+  "includeMcpJson": true,
+  "tools": [
+    "@beetle-ba/list_runs",
+    "@beetle-ba/get_run_evidence",
+    "@beetle-ba/get_evidence",
+    "@beetle-ba/list_records",
+    "@beetle-ba/get_record",
+    "@beetle-ba/list_processes",
+    "@beetle-ba/get_process",
+    "@beetle-ba/get_pending_feedback",
+    "@beetle-ba/start_session",
+    "@beetle-ba/record_pass",
+    "@beetle-ba/finish_session",
+    "@beetle-ba/create_record",
+    "@beetle-ba/revise_record",
+    "@beetle-ba/withdraw_record",
+    "@beetle-ba/address_crawler_question",
+    "read"
+  ],
+  "permissions": {
+    "rules": [
+      {
+        "capability": "fs_read",
+        "match": [
+          ".kiro/skills/ba-practice/**"
+        ],
+        "effect": "allow"
+      },
+      {
+        "capability": "fs_read",
+        "match": [
+          "**"
+        ],
+        "exclude": [
+          ".kiro/skills/ba-practice/**"
+        ],
+        "effect": "deny"
+      }
+    ]
+  },
+  "resources": [
+    "skill://.kiro/skills/ba-practice/SKILL.md"
+  ]
+}
