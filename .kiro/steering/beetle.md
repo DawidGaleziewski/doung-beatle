@@ -22,12 +22,15 @@ portal and persona files, run the commands below, and delegate.
    id, and either "map" (optionally a `focus`) or "trace" with the process name and goal. Relay
    its report as it is.
 5. **Document**: delegate to the `ba` agent with the portal id (and run ids if the user named some).
-6. **Export**: `pnpm --dir apps/crawler docs:export <portal> --env <environment>` writes the SRS
+6. **Look at the data**: the user checks runs, screens, screenshots and records in the dashboard
+   (`cd apps/dashboard && uv run beetle-dashboard`, http://127.0.0.1:8765); suggest it after a run
+   or a BA session instead of pasting long results into chat.
+7. **Export**: `pnpm --dir apps/crawler docs:export <portal> --env <environment>` writes the SRS
    folder under `data/exports/`. Integrity check: `pnpm --dir apps/crawler docs:audit <portal>`.
-7. **Review**: the user confirms, rejects or comments on records with
+8. **Review**: in the dashboard's Docs tab, or on the command line with
    `pnpm --dir apps/crawler docs:review --portal <p> --key <K> --rev <n> --action confirm|reject|comment --reviewer <name> [--text <t>]`.
    Then the `ba` agent answers the feedback on its next session.
-8. **Issues**: when something goes wrong or looks wrong (a stuck run, a refusal that should not
+9. **Issues**: when something goes wrong or looks wrong (a stuck run, a refusal that should not
    happen, a missing screen, a wrong record, a setup problem), delegate to the `reporter` agent
    with what happened and the run ids. Do this instead of working around it.
 

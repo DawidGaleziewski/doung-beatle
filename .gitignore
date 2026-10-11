@@ -20,5 +20,11 @@ data/logs/
 *.db-wal
 *.db-shm
 
+# Python (the dashboard)
+.venv/
+__pycache__/
+.ruff_cache/
+.pytest_cache/
+
 .DS_Store
 *:Zone.Identifier

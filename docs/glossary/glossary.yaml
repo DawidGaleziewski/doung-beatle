@@ -1,0 +1,2223 @@
+# Beetle glossary: the single source for the dashboard Glossary page, its [?] tooltips and
+# section intros, and the generated README.md next to this file (spec 006).
+# After editing, run `uv run beetle-glossary --write` in apps/dashboard to refresh README.md.
+# Field rules: specs/006-glossary-ba-wiki/data-model.md.
+
+scope: >-
+  This glossary explains Beetle's own vocabulary: the words the dashboard, the specs and the
+  agents use for runs, evidence and documentation. It is not the portal glossary the BA agent
+  writes (GL records in the Docs tab), which explains the documented website's business terms,
+  such as "Składka" or "OC".
+
+entries:
+  # ---- Beetle: runs and setup ---------------------------------------------------------------
+  - id: run
+    term: Run
+    category: beetle
+    group: Runs and setup
+    placement: intro
+    short: One session of the crawler against one portal, as one persona, in one mode, and everything it recorded on the way.
+    explanation: |
+      A run starts when the crawler agent calls `start_run` and ends with `finish_run` or when
+      something stops it. Every state, action, form, network call shape, decision and question
+      it records belongs to that run, so the run is the unit you open to see "what happened".
+
+      Status codes on runs: `[ OK ]` completed, `[RUN.]` running, `[STOP]` stopped on a warning
+      (for example an anti-bot block), `[INT.]` interrupted (the process died or was stopped; it
+      can be resumed without repeating recorded work).
+    example: The map run 01a0fe67… on sample-insurer completed with 12 states and 201 frontier items.
+    appears_in: [Overview → Runs table, Run page header]
+    labels: [Run, Runs]
+    related: [mode, persona, environment, frontier]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: mode
+    term: Mode (map / trace)
+    category: beetle
+    group: Runs and setup
+    short: What a run is for, either map mode, which explores the whole portal, or trace mode, which records one named process step by step.
+    explanation: |
+      **Map** mode explores broadly: it visits every reachable state within scope and budget and
+      records what is there. Off production it fills a form with test data before pressing its
+      submit button (form autofill), so the pages behind forms are mapped too; on production it
+      never submits.
+
+      **Trace** mode follows one named business process, such as "Oblicz składkę OC/AC", with
+      inputs from the persona, and records the ordered steps and what the portal did after each.
+      On production it stops at the submit boundary. The BA asks for trace runs through
+      follow-up tasks when a map run is not enough.
+    appears_in: [Runs table → Mode]
+    labels: [Mode, map, trace]
+    related: [run, trace-process, submit-boundary, follow-up-task, form-autofill]
+    changed_in: R-20
+    changed_on: 2026-10-04
+
+  - id: environment
+    term: Environment (sandbox / production)
+    category: beetle
+    group: Runs and setup
+    short: Which copy of a site a scan targets, production (the live site), staging or sandbox; each has its own address and limit of how far the crawler may go.
+    explanation: |
+      A portal has one or more environments (see Portal settings). A public address must be
+      declared production. Since constitution 4.0.0 production is not read-only by rule: the
+      crawler may fill, submit and log in up to the limit the BA set for that environment, which
+      on a live site really happens. Each scan from the chat only looks unless you allow edits
+      for it (see Scan choices). Production keeps a conservative rate limit, an identifying
+      User-Agent, and stops on a CAPTCHA. Each run records its environment. Separately, the
+      dashboard's "data store" switch picks which local database file (`data/db/<name>.sqlite`)
+      it reads; runs of every environment can be in one store.
+    example: "wikisite-org: production https://www.wikisite.org/ (only look); sample-insurer: sandbox"
+    appears_in: [Portal settings, Runs table → Environment]
+    labels: [Environment, sandbox, staging, production]
+    related: [safety-class, portal-scope, form-autofill, portal-settings, scan-choices]
+    changed_in: R-31
+    changed_on: 2026-10-07
+
+  - id: persona
+    term: Persona
+    category: beetle
+    group: Runs and setup
+    short: Who the crawler acts as during a run, such as an anonymous guest, defined in a persona file that can only narrow what the portal config allows.
+    explanation: |
+      A persona file (`personas/<portal>/<persona>.yaml`) says who is acting: logged in or not,
+      which inputs to type in trace mode, its own budgets and safety ceiling. Personas can extend
+      shared pieces (`personas/_mixins/`). The run's effective safety ceiling is the lower of the
+      portal's and the persona's, so a persona can restrict but never widen. Secrets are referenced,
+      never written in the file.
+    example: sample-insurer/guest extends the anonymous base mixin and the trace-input mixin.
+    appears_in: [Runs table → Persona]
+    labels: [Persona]
+    related: [run, safety-class, budget]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: sample-portal
+    term: Reference portal / ground truth
+    category: beetle
+    group: Runs and setup
+    short: A practice insurance website that Beetle runs locally, with a written answer key (the ground truth) used to measure how good the crawler's and the BA's results are.
+    explanation: |
+      The reference portal is a fake Polish insurer, "Towarzystwo Ubezpieczeń Wzorcowych",
+      served on `http://127.0.0.1:4010` by `pnpm sample-portal` in `apps/crawler`. Because we
+      wrote it, we know everything it contains: its screens, fields, rules and processes are listed
+      in a ground-truth file, `ground-truth.yaml` (ground truth is always YAML, written and
+      reviewed by people, guideline G-34). Comparing the BA's documentation with that file shows
+      what was found, what was missed and what was over-claimed (`pnpm docs:evaluate`, see
+      Coverage score). Its data is safe to show and stable, which is why glossary examples come
+      from it. A live site we don't own keeps its ground truth in `apps/crawler/evals/ground-truth/`.
+    appears_in: [Docs tab → sample-insurer, portals/sample-insurer]
+    labels: [sample-insurer, ground truth]
+    related: [run, documentation-record, coverage-score, over-claim, eval-task]
+    changed_in: R-46
+    changed_on: 2026-10-10
+
+  - id: coverage-score
+    term: Coverage score
+    category: beetle
+    group: Runs and setup
+    short: The share of a ground-truth category (screens, fields, constraints, rules, processes, terms) that the BA's documentation covers, as scored by `docs:evaluate`.
+    explanation: |
+      `pnpm docs:evaluate <portal> --ground-truth <file>` compares the latest documentation records
+      with the reference portal's ground truth and gives one percentage per category, with the
+      missing ground-truth ids. Each category has a minimum (the SC-008 targets: screens 90,
+      fields 90, constraints 80, rules 70, processes 100, terms 80) and the command fails when one
+      is not met, so it can gate a pipeline run. Matching is deterministic: a screen by its route
+      template, a field by its verbatim label, a rule by its anchor screen, label and claim markers.
+      A score says the documentation mentions an item, not that it is complete: a rule counts when
+      any one of its claim markers appears.
+    example: "Goal run 2026-10-04 on sample-insurer: screens 100 (17/17), rules 100 (16/16), 0 over-claims."
+    appears_in: ["data/exports/<portal>-eval.json", "`pnpm docs:evaluate`"]
+    labels: [Score, Coverage]
+    related: [sample-portal, over-claim]
+    changed_in: R-16
+    changed_on: 2026-10-04
+
+  - id: over-claim
+    term: Over-claim
+    category: beetle
+    group: Runs and setup
+    short: A documentation record that states a rule as observed although the ground truth says a guest cannot observe it.
+    explanation: |
+      Some of the reference portal's rules are hidden from a guest (behind the login, or only in
+      the back office). If the BA documents one of them with confidence `observed`, the evaluation
+      reports an over-claim: the documentation is more certain than the evidence allows. Recording
+      such a rule as `needs_confirmation` or flagged not observable is fine. The goal is 0
+      over-claims (SC-009); one over-claim fails `docs:evaluate`.
+    example: "The renewal window (\"30 dni\", only on the logged-in renewal page) documented as observed would be an over-claim."
+    appears_in: ["data/exports/<portal>-eval.json", "`pnpm docs:evaluate`"]
+    labels: [Over-claims, overclaims]
+    related: [coverage-score, confidence, sample-portal]
+    changed_in: R-16
+    changed_on: 2026-10-04
+
+  # ---- Beetle: crawling -----------------------------------------------------------------------
+  - id: state
+    term: State
+    category: beetle
+    group: Crawling
+    placement: intro
+    short: One distinct condition of a portal screen that the crawler recognised and recorded, identified by its fingerprint.
+    explanation: |
+      A state is "a screen as it looked", not a URL. One URL can hold several states (a form
+      before and after a validation error), and many URLs can be one state (product pages that
+      differ only by an id). Each state has a route template, a title, a fingerprint, a cluster,
+      a stabilization result and an evidence snapshot. States are shared across runs; each run
+      records which states it observed.
+    example: "The reference map run observed 12 states, from / (\"Ubezpieczenia dla Ciebie\") to /moje-polisy/przedluz."
+    appears_in: [Run page → States observed]
+    labels: [State, States, States observed]
+    related: [fingerprint, cluster, settled, transition]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: fingerprint
+    term: Fingerprint
+    category: beetle
+    group: Crawling
+    short: A hash of a page's route template and its accessible structure, so two observations with the same fingerprint count as the same state.
+    explanation: |
+      The fingerprint is computed by pure code, not by the AI agent: the route template plus a
+      canonical form of the page's accessibility tree (roles and names, with volatile text
+      removed), hashed with sha256. Identical fingerprint means the same state. Near-identical
+      pages are grouped one level up, in a cluster. Every merge or split decision is written to
+      the decision log with its similarity score.
+    appears_in: [Run page → Decision log (merge, split), Run trace → fingerprint phase]
+    labels: [Fingerprint]
+    related: [state, cluster]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: cluster
+    term: Cluster
+    category: beetle
+    group: Crawling
+    short: A group of states that look almost the same, so near-duplicate pages are kept together instead of being documented as unrelated screens.
+    explanation: |
+      Each state has one exact fingerprint and belongs to one cluster. When a new page arrives,
+      its structure is compared with existing clusters; at a similarity of 0.9 or more it joins
+      that cluster ("merge"), otherwise it starts a new one ("split"). Both outcomes are logged.
+      The BA usually documents one screen per cluster.
+    example: The reference map run found 12 states in 10 clusters.
+    appears_in: [States observed → Cluster]
+    labels: [Cluster]
+    related: [fingerprint, state, screen]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: settled
+    term: Settled / never stabilized
+    category: beetle
+    group: Crawling
+    short: Whether the page had stopped changing when it was recorded, meaning network requests, DOM changes and animations had all gone quiet.
+    explanation: |
+      Before recording, the crawler waits for the page to stabilise. `settled` means it did.
+      `never_stabilized` means the wait ran out while something was still moving, so the record
+      may show a half-loaded page; it is still recorded, with evidence, and the run trace shows
+      what was still moving.
+    example: All 12 states of the reference map run are settled.
+    appears_in: [States observed → Stabilization, Run trace → settle phase]
+    labels: [Stabilization, settled, never_stabilized]
+    related: [state, tool-call]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: transition
+    term: Transition (edge)
+    category: beetle
+    group: Crawling
+    short: An action that leads from one state to another, such as clicking a menu link, recorded with its safety class and locators.
+    explanation: |
+      States are the dots of the portal map and transitions are the arrows. A transition records
+      the state it started from, the state it led to (or none), the action that caused it, its
+      safety class and whether it was executed or skipped. Skipped transitions are kept so the
+      map shows what exists even where the crawler did not go.
+    appears_in: [Map diagrams, Run trace]
+    labels: [Transition, Edge]
+    related: [state, safety-class, top-locator]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: portal-scope
+    term: Scope / denylist
+    category: beetle
+    group: Crawling
+    short: The part of a site the crawler may visit (domains and paths in the portal config) and the URLs or actions it must never touch.
+    explanation: |
+      The portal config lists `allowed_domains` and `allowed_paths`; anything else is out of
+      scope and skipped with the reason `out_of_scope`. The `denylist` names paths or controls that
+      are forbidden even inside scope, such as logout, payment or an admin reset page; those are
+      skipped as `denylisted`. Both appear as skip reasons on the frontier.
+    example: "sample-insurer allows 127.0.0.1 with paths /* and denylists path:/__admin/*."
+    appears_in: [Frontier → Status, skip reasons]
+    labels: [Scope, Denylist, out_of_scope, denylisted]
+    related: [frontier, budget, environment]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: budget
+    term: Budget
+    category: beetle
+    group: Crawling
+    short: A limit a run must stay within, such as the number of states, click depth, actions per state, running time or steps.
+    explanation: |
+      Five budgets exist: `max_depth`, `max_states`, `max_actions_per_state`,
+      `max_run_time_minutes` and `max_steps`. The portal config sets them and a persona may lower
+      them. When a budget runs out, remaining frontier items are marked `budget_reached` and
+      listed, never silently dropped, so you can see what a bigger budget would have explored.
+    example: sample-insurer allows depth 6, 100 states, 40 actions per state, 30 minutes and 400 steps.
+    appears_in: [Frontier → budget_reached]
+    labels: [Budget, budget_reached]
+    related: [frontier, priority-depth, persona]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  # ---- Beetle: actions and safety -------------------------------------------------------------
+  - id: accessible-name
+    term: Accessible name
+    category: beetle
+    group: Actions and safety
+    short: The text a screen reader announces for an element, such as a button's caption or a field's label, which Beetle uses to name elements.
+    explanation: |
+      Beetle identifies elements the way assistive technology does: by role plus accessible
+      name. That keeps the documentation in the portal's own words and gives stable locators
+      for tests. An empty accessible name (shown as "—") is itself a finding: the control has no
+      label a screen reader could read.
+    example: A link named "Start" in the main menu.
+    appears_in: [Actions → Accessible name]
+    labels: [Accessible name]
+    related: [role, top-locator]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: role
+    term: Role
+    category: beetle
+    group: Actions and safety
+    short: What kind of element something is in accessibility terms, such as link, button, textbox or checkbox, not a user role.
+    explanation: |
+      Roles come from the page's accessibility tree (ARIA roles, explicit or implied by HTML).
+      Together with the accessible name they identify an element. Do not confuse it with a
+      persona or a business role.
+    appears_in: [Actions → Role]
+    labels: [Role]
+    related: [accessible-name, persona]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: safety-class
+    term: Safety class
+    category: beetle
+    group: Actions and safety
+    short: How risky an action is, either read, mutating, destructive or external side effect, with unclear cases treated as unsafe.
+    explanation: |
+      Every action is classified by pure code before it may run:
+
+      - `read`: only looks (a navigation link).
+      - `mutating`: changes data (submitting a form).
+      - `destructive`: deletes or cancels something.
+      - `external-side-effect`: does something outside the site, such as sending an e-mail or
+        making a payment.
+
+      If the code cannot prove an action is read-only it does not assume it is. On production
+      only `read` actions run. The effective ceiling of a run is the lower of the portal's and
+      the persona's.
+    example: On the reference map run the "Porównaj" button was classified mutating (no evidence it is read-only) and skipped.
+    appears_in: [Actions → Safety class, Frontier → Safety class]
+    labels: [Safety class, read, mutating, destructive, external-side-effect]
+    related: [decision, environment, persona]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: decision
+    term: Decision (allowed / skipped)
+    category: beetle
+    group: Actions and safety
+    short: Whether the crawler was permitted to perform an action and, if not, the rule that stopped it.
+    explanation: |
+      Each extracted action is checked against the safety ceiling, scope, denylist, robots.txt and
+      budgets. The Decision column shows "allowed" or the skip reason, which names the rule, so you
+      can tell a deliberate safety skip from a gap in coverage.
+    example: "ceiling:read: classified mutating (no evidence that this control is read-only), above the effective ceiling read."
+    appears_in: [Actions → Decision]
+    labels: [Decision]
+    related: [safety-class, portal-scope, budget]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: top-locator
+    term: Top locator
+    category: beetle
+    group: Actions and safety
+    short: The best of the ranked ways the crawler found to point at an element, which QA can reuse when writing tests.
+    explanation: |
+      For each action the crawler stores several candidate locators, ranked: role + accessible name
+      first, then visible text, then container path, then `data-testid` if present. The top one is
+      shown in the table; the rest are fallbacks. Generated tests follow the same priority, and QA
+      validates a locator before relying on it.
+    example: role=link[name="Start"], with fallbacks text "Start" and the container path.
+    appears_in: [Actions → Top locator]
+    labels: [Top locator, Locator]
+    related: [accessible-name, role, transition]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: click-signal
+    term: Click signal
+    category: beetle
+    group: Actions and safety
+    short: What makes an element without an ARIA role count as clickable, such as a click listener, inline handler, framework handler, pointer cursor or tabindex.
+    explanation: |
+      Elements with no explicit ARIA role but behavioural signals that they respond to clicks are
+      recorded with `role: generic` and a `found_by` list naming the signals that identified them.
+      The BA labels the inferred meaning based on context: is it a button, a menu item, a
+      navigation link or something else.
+    appears_in: [Actions → Role, Actions → found_by]
+    labels: [Click signal, signal]
+    related: [signal-found-action, accessible-name, role]
+    changed_in: R-28
+    changed_on: 2026-10-09
+
+  - id: signal-found-action
+    term: Signal-found action
+    category: beetle
+    group: Actions and safety
+    short: An action issued for an element without an ARIA role but with click signals; the BA labels its meaning inferred from context.
+    explanation: |
+      When the crawler finds an element with click signals but no role, it records an action with
+      `role: generic` and includes a `found_by` list of the signals (click handler, pointer
+      cursor, tabindex, framework handler). The meaning of this action — whether it is a button,
+      menu item or link — is inferred by the BA from where it appears and what it does.
+    appears_in: [Actions → Role, Actions → found_by]
+    labels: [Signal-found, generic role]
+    related: [click-signal, accessible-name, decision]
+    changed_in: R-28
+    changed_on: 2026-10-09
+
+  # ---- Beetle: frontier -----------------------------------------------------------------------
+  - id: frontier
+    term: Frontier
+    category: beetle
+    group: Frontier
+    page: frontier
+    short: The edge of what the crawler has explored, every action it has seen but not yet followed, plus a record of what happened to each one.
+    explanation: |
+      "Frontier" is the standard name for this in web crawlers and graph search; it is not a BA
+      term. Picture fog of war: each visited page reveals new links and buttons, which join the
+      frontier. The crawler keeps taking the next item, following it and adding what it finds,
+      until nothing is left or a budget stops it.
+
+      Beetle's Frontier table also keeps history: each item ends `done` (followed) or skipped
+      with a reason (`skipped_unsafe`, `out_of_scope`, `denylisted`, `robots_disallowed`,
+      `budget_reached`, `unreachable`). An empty list of `pending` items means the map is complete
+      within the rules.
+    example: The reference map run queued 201 items, followed 195 and skipped 6 as unsafe.
+    appears_in: [Run page → Frontier]
+    labels: [Frontier]
+    related: [priority-depth, budget, decision, portal-scope]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: inferred-link
+    term: Inferred link
+    category: beetle
+    group: Frontier
+    short: A frontier item for a link whose target address the run already reached by clicking another link, recorded as a transition with no additional click.
+    explanation: |
+      When the next frontier item is a plain link and the run already reached that link's target
+      address by clicking another link, the server does not hand the item out. Instead, it records
+      a transition marked `inferred` to the same page, with the evidence from that earlier click,
+      and marks the item done (`same_target`). If the earlier click failed, the link is clicked
+      as usual. This saves the crawler agent from re-walking shared header and footer menus.
+    example: On sample-insurer, 319 transitions were recorded but only 32 were clicked; 287 were inferred.
+    appears_in: [Frontier report, finish_run coverage (actions_inferred)]
+    labels: [Inferred, inferred]
+    related: [frontier, transition, confidence]
+    changed_in: R-24
+    changed_on: 2026-10-08
+
+  - id: next-item
+    term: Next item
+    category: beetle
+    group: Frontier
+    short: In a map run, the frontier item the crawler should work on next, returned by every navigate and act result so the crawler does not have to ask for it.
+    explanation: |
+      After each action in a map run, the `next` field in the result names the next frontier item
+      to follow, sparing the crawler agent a separate `get_next_frontier_item` call. When `next`
+      is null, the frontier is empty or a budget constraint has been reached.
+    example: An act result ends with next.item = link "Kontakt" on the home page, so the agent acts on that action id straight away.
+    appears_in: [Run page → Trace (navigate and act results)]
+    labels: [next, Next item]
+    related: [frontier, priority-depth]
+    changed_in: R-24
+    changed_on: 2026-10-08
+
+  - id: priority-depth
+    term: Priority / depth
+    category: beetle
+    group: Frontier
+    short: Priority decides which frontier item is followed next (higher first, then oldest first), and depth is how many clicks away from the start page it is.
+    explanation: |
+      The server, not the AI agent, decides the order: the pending item with the highest priority,
+      and among equals the one queued first. Depth counts navigation steps from the start page and
+      is limited by the `max_depth` budget.
+    appears_in: [Frontier → Priority, Frontier → Depth]
+    labels: [Priority, Depth]
+    related: [frontier, budget]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  # ---- Beetle: recorded evidence -------------------------------------------------------------
+  - id: evidence
+    term: Evidence
+    category: beetle
+    group: Recorded evidence
+    page: evidence
+    short: What the crawler saved as proof of what it saw, such as page snapshots, screenshots, form fields, locators and network shapes, which every documentation statement must cite.
+    explanation: |
+      Beetle never asks you to trust a statement on its own: the crawler stores proof, and
+      every BA record points at it. Evidence includes an accessibility snapshot, a screenshot and
+      a layout (element keys with their boxes) per new state, the fields of each form, the ranked
+      locators and safety class of each action, the shape (not the content) of network calls,
+      process steps, decisions and, on sandbox only, a Playwright trace. A record can cite a whole
+      state or one screen region of it. Text evidence is masked only when the portal turns on
+      `pii_scrub`; screenshots are never masked; request bodies are never stored. The long page
+      explains each kind, where it lives and how the BA uses it.
+    appears_in: [Run page sections, Docs record → Evidence]
+    labels: [Evidence]
+    related: [evidence-link, target, network-call-shape, layers, screenshot, screen-region]
+    changed_in: R-20
+    changed_on: 2026-10-04
+
+  - id: network-call-shape
+    term: Network call shape
+    category: beetle
+    group: Recorded evidence
+    short: A request the portal's own page made, recorded as method, URL template, status and the structure of its request and response, without the actual values.
+    explanation: |
+      Beetle records what the page asked its server for, not what it sent. The structure
+      (field names and types) shows what data the screen exchanges, while the absence of values
+      keeps personal data out. Only background `fetch`/XHR requests are captured; a classic form
+      POST followed by a redirect is not. The crawler never calls a portal's API itself.
+    appears_in: [Run page → Network call shapes]
+    labels: [Network call shapes, Shapes]
+    related: [evidence, data-item]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: screenshot
+    term: Screenshot
+    category: beetle
+    group: Recorded evidence
+    short: A full-page picture of a state, taken once when the crawler first records it, with no masking.
+    explanation: |
+      When a map or trace run records a new state, the crawler takes one PNG of the whole page at
+      the persona's viewport width, at the same moment as the accessibility snapshot, before
+      anything clicks or types on the page. A state seen again keeps its first picture. Very long
+      pages are cut at 10 000 px, and the cut is noted under the image. If the capture fails, the
+      state is still recorded, a warning goes to the decision log, and the dashboard shows the
+      state's wireframe instead. Screenshots are taken on every environment, production
+      included, and are not masked (constitution 2.0.0).
+    example: The Kalkulator OC/AC state shows its screenshot on the state page and on every record that cites it.
+    appears_in: [Run page → States → Picture, State page → Screenshot, Docs record → Screens]
+    labels: [Screenshot, Screens, Picture]
+    related: [state, element-key, screen-region, wireframe]
+    changed_in: R-20
+    changed_on: 2026-10-04
+
+  - id: element-key
+    term: Element key
+    category: beetle
+    group: Recorded evidence
+    short: The name Beetle gives one notable element of a recorded page, its role and accessible name plus a number when the same pair repeats, such as textbox "Pojemność silnika".
+    explanation: |
+      Headings, fields, buttons, links, images, tables, lists, forms and landmarks each get a key
+      in page order: `role "name"`, or just `role` when there is no name, with `#2`, `#3` for
+      repeats (`link "Więcej"#2`). The same rule runs on the stored snapshot and on the page's
+      **layout**, the list of keys with their position and size on the screenshot, so a key
+      always points at the same element in the snapshot, the screenshot and the wireframe. The BA
+      copies keys from the state's evidence when it cites a screen region.
+    example: 'button "Oblicz składkę" is the calculator''s submit button; navigation#2 is the second unnamed navigation landmark.'
+    appears_in: [State page → Show elements, Docs record → Screens legend]
+    labels: [Element key, elements, layout]
+    related: [screen-region, accessible-name, role, screenshot]
+    changed_in: R-20
+    changed_on: 2026-10-04
+
+  - id: screen-region
+    term: Screen region
+    category: beetle
+    group: Recorded evidence
+    short: Evidence that points at one element of a state's screenshot, so the dashboard and the export can outline exactly what a record talks about.
+    explanation: |
+      A screen region is a kind of evidence link: a state plus an element key, with an optional
+      note. A data item cites the field it describes, a rule or requirement about one control
+      cites that control, and a screen record cites the whole state. The dashboard draws each
+      cited region as a numbered outline over the screenshot and lists the keys underneath; an
+      element that has no position on the screenshot (hidden or below the cut) is listed as "not
+      visible on the screenshot". The image itself is never changed, so one screenshot serves
+      every record that cites it.
+    example: DI-004 Pojemność silnika cites the region textbox "Pojemność silnika" on the calculator state.
+    appears_in: [Docs record → Screens, Docs record → Evidence]
+    labels: [Screen region, screen_region, region]
+    related: [element-key, evidence-link, screenshot, data-item]
+    changed_in: R-20
+    changed_on: 2026-10-04
+
+  - id: wireframe
+    term: Wireframe
+    category: beetle
+    group: Recorded evidence
+    short: A plain sketch of a recorded page, drawn in one fixed style from its accessibility snapshot, shown where there is no screenshot and downloadable as an editable Excalidraw file.
+    explanation: |
+      Beetle draws headings, labelled fields, buttons, links, tables, lists and landmarks in
+      page order, one under the other, and nothing that is not in the recorded snapshot: it does
+      not guess the real layout (the screenshot shows that). The same snapshot always gives the
+      same drawing. Each wireframe comes as an SVG image and as a `.excalidraw` file you can open
+      on excalidraw.com or in the Excalidraw VS Code extension and edit. `wireframes:build`
+      redraws them when the style changes.
+    appears_in: [State page → Wireframe, Run page → States → Picture, SRS export → Screens]
+    labels: [Wireframe, Excalidraw]
+    related: [screenshot, state, srs-export]
+    changed_in: R-21
+    changed_on: 2026-10-04
+
+  - id: form-autofill
+    term: Form autofill
+    category: beetle
+    group: Crawling
+    short: In map mode off production, the crawler fills a form with test data just before it presses the form's submit button, so it can reach the page behind the form.
+    explanation: |
+      Values come from the persona's inputs when it has one for the field's label, otherwise from
+      a fixed generator per field type (an e-mail on a test domain, a number inside the field's
+      limits, the first real option of a list). Each autofill is written to the trace and the
+      decision log with the field names and values. On production the submit itself is refused,
+      so nothing is filled or sent there.
+    appears_in: [Run page → Trace → form_autofill, Run page → Decisions]
+    labels: [Autofill, form_autofill]
+    related: [mode, environment, persona, safety-class]
+    changed_in: R-20
+    changed_on: 2026-10-04
+
+  - id: page-composition
+    term: Page composition
+    category: beetle
+    group: Crawling
+    short: "Per observation, the page's structure: frames, micro-frontend mount points, module loaders, bundles and clickable element counts."
+    explanation: |
+      When the crawler records a page, it observes not just the content but the structure: which
+      frames it contains (legacy framesets or modern iframes), where micro-frontends mount (`#root`,
+      `[data-mfe]`), whether modules are loaded dynamically, how many JavaScript bundles are
+      running and how many clickable elements it found. Page composition shows the page's
+      architecture, not just its text and forms.
+    appears_in: [Run page → State details, State page]
+    labels: [Page composition, composition]
+    related: [mount-point, state]
+    changed_in: R-28
+    changed_on: 2026-10-09
+
+  - id: mount-point
+    term: Mount point
+    category: beetle
+    group: Crawling
+    short: "An element a micro-frontend renders into, such as `#root` or `[data-mfe]`."
+    explanation: |
+      In modern multi-frontend architectures, a shell page contains placeholders (mount points)
+      where each micro-frontend renders its own tree. The crawler observes and records these:
+      an element with an id or data attribute that marks it as a destination for a dynamic
+      subtree. Understanding mount points helps trace how a page is composed from pieces.
+    appears_in: [Run page → State details, page composition]
+    labels: [Mount point, mfe mount]
+    related: [page-composition, state]
+    changed_in: R-28
+    changed_on: 2026-10-09
+
+  - id: div-form
+    term: Div form
+    category: beetle
+    group: Crawling
+    short: "Inputs outside any `<form>` element recorded as a form, one per container with a submit-like control."
+    explanation: |
+      Legacy and modern portals sometimes build forms from divs without using the HTML `<form>`
+      element: input fields as divs or spans, and a submit button elsewhere. The crawler recognizes
+      them by finding a container with input-like controls and a submit-like button, and records
+      them as a form. The container's structure shows which fields belong together.
+    appears_in: [Run page → Forms, Actions]
+    labels: [Div form, form]
+    related: [form-autofill, state]
+    changed_in: R-28
+    changed_on: 2026-10-09
+
+  - id: pii-scrubbing
+    term: PII scrubbing
+    category: beetle
+    group: Recorded evidence
+    short: Masking personal data such as e-mails and phone numbers in stored text evidence, off by default and turned on per portal with pii_scrub.
+    explanation: |
+      Until constitution 2.0.0 every snapshot, title, form field and network shape was masked
+      before it was stored. Beetle now runs almost only against test portals with disposable
+      data, so text evidence is stored as recorded unless the portal config sets
+      `pii_scrub: true`. Screenshots are never masked. Developer logs and trace error messages
+      stay masked either way.
+    appears_in: [Portal config → pii_scrub]
+    labels: [pii_scrub, masked]
+    related: [evidence, environment]
+    changed_in: R-20
+    changed_on: 2026-10-04
+
+  - id: crawler-open-question
+    term: Open question (crawler)
+    category: beetle
+    group: Recorded evidence
+    short: Something the crawler noticed but cannot explain from the screen, handed to the BA instead of guessed.
+    explanation: |
+      The crawler records facts and does not interpret them. When it meets something puzzling,
+      such as a button that is disabled for guests, it adds an open question with
+      `add_open_question` and moves on. The BA picks these up and either answers them from the
+      evidence or turns them into an open question record for a person.
+    appears_in: [Run page → open questions, Docs evidence → open question]
+    labels: [Open question]
+    related: [rule-candidate]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: rule-candidate
+    term: Rule candidate
+    category: beetle
+    group: Recorded evidence
+    short: A possible business rule the crawler spotted, such as a limit stated in an error message, recorded as a hint for the BA and never as a fact.
+    explanation: |
+      The crawler may flag a few patterns that look like rules with `add_rule_candidate`. It does
+      not decide whether they are rules. The BA checks each against the evidence and writes a
+      business rule record only when the evidence supports it.
+    appears_in: [Run page, Docs evidence → rule candidate]
+    labels: [Rule candidate]
+    related: [business-rule, crawler-open-question]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  # ---- Beetle: traced processes ---------------------------------------------------------------
+  - id: trace-process
+    term: Process (trace mode)
+    category: beetle
+    group: Traced processes
+    short: The ordered steps the crawler recorded while following one named process in trace mode, the raw material for the BA's process record.
+    explanation: |
+      "Process" has two meanings in Beetle. Here it is what a trace run recorded: a name, the
+      persona, the ordered steps and an outcome. The BA turns it into a PROC documentation record
+      (see Process (PROC)), which is the documented business process.
+
+      Outcomes: `[ OK ]` goal reached, `[BNDY]` stopped at the submit boundary on purpose,
+      `[STOP]` stopped by a problem, `[ABND]` abandoned.
+    example: The trace "Oblicz składkę OC/AC" on sample-insurer reached its goal.
+    appears_in: [Run page → Process tab]
+    labels: [Process]
+    related: [process-step, submit-boundary, process-record, mode]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: process-step
+    term: Step / intent / outcome
+    category: beetle
+    group: Traced processes
+    short: One move in a traced process, where intent is what the crawler meant to do and outcome is what the portal did in response.
+    explanation: |
+      Each step records its intent in plain words ("fill in the vehicle's year"), the kind of move
+      (click, fill, select…), the value used, and the observed outcomes, such as a new screen, a
+      validation message or a changed price. Steps are evidence the BA cites in process and use
+      case records.
+    appears_in: [Process tab → Steps (Intent, Kind, Value, Outcomes)]
+    labels: [Steps, Intent, Outcome, Outcomes]
+    related: [trace-process, submit-boundary]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: submit-boundary
+    term: Submit boundary
+    category: beetle
+    group: Traced processes
+    short: The point in a process where continuing would submit, buy or send something, where a trace on production stops on purpose.
+    explanation: |
+      On production only read-only actions are allowed, so a trace fills the steps it safely can
+      and stops before the final submit. The outcome `[BNDY]` means the run worked as intended,
+      not that it failed. On a sandbox the same process may continue past the boundary.
+    appears_in: ["Process tab → Outcome [BNDY]"]
+    labels: [BNDY, boundary_reached]
+    related: [trace-process, safety-class, environment]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  # ---- Beetle: run trace (debugging) ---------------------------------------------------------
+  - id: tool-call
+    term: Tool call / phase / span
+    category: beetle
+    group: Run trace
+    short: A tool call is one request the crawler agent made to Beetle's server, a phase is one stage inside it, and a span is one timed block in that tree.
+    explanation: |
+      The crawler agent works only through tools such as `start_run`, `navigate`, `act`,
+      `get_next_frontier_item` and `finish_run`. Inside each call the server runs phases, for
+      example `gate` (safety checks), `settle`, `observe`, `fingerprint`, `record_state`,
+      `record_forms`, `record_api_calls` and `enqueue_frontier`. The Trace tab shows these as
+      nested, timed spans, which is how you debug a slow or failing run. This trace describes
+      the crawler's machinery, not the portal.
+    appears_in: [Run page → Trace tab]
+    labels: [Tool calls, Call, Phase, Tool]
+    related: [run-less-call, percentiles]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: run-less-call
+    term: Run-less calls
+    category: beetle
+    group: Run trace
+    short: Tool calls that happened outside any run, such as a refused start_run, kept so that nothing the server did is invisible.
+    explanation: |
+      Most tool calls belong to a run. A few cannot: a `start_run` that was refused (for example
+      because the portal's compliance check is missing) never created a run. These calls are
+      listed on the Activity page so a refusal is visible rather than silently lost.
+    appears_in: [Activity → Run-less calls]
+    labels: [Run-less calls]
+    related: [tool-call]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: percentiles
+    term: p50 / p95
+    category: beetle
+    group: Run trace
+    short: Timing percentiles, where half of the measured calls were faster than p50 and 95 in 100 were faster than p95.
+    explanation: |
+      The trace summary lists each phase with how often it ran, the total time and two
+      percentiles. p50 (the median) shows the typical time; p95 shows the slow tail. A large gap
+      between them means a phase is usually fast but sometimes very slow, which is often a page
+      that takes long to settle.
+    appears_in: [Trace tab → summary (p50, p95)]
+    labels: [p50, p95]
+    related: [tool-call]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  # ---- Beetle: BA workflow --------------------------------------------------------------------
+  - id: layers
+    term: Layer A / Layer B
+    category: beetle
+    group: BA workflow
+    short: Layer A is the mechanical map the crawler records (states, actions, forms), and Layer B is the BA's documentation built on top of it.
+    explanation: |
+      Layer A answers "what is on the screen and what happens when you click". Layer B answers
+      "what does the business do here": capabilities, processes, requirements, rules, data and
+      terms. Layer B is the deliverable; Layer A is its evidence, and every Layer B statement cites
+      Layer A.
+    appears_in: [Specs and data docs]
+    labels: [Layer A, Layer B]
+    related: [evidence, documentation-record]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: follow-up-task
+    term: Follow-up task (FUP)
+    category: beetle
+    group: BA workflow
+    short: A request from the BA to the crawler to go and record something specific, because the BA never browses itself.
+    explanation: |
+      When the evidence is not enough, for example a process was never traced, the BA writes a
+      follow-up task. A person then runs the crawler (usually in trace mode) to fulfil it, and the
+      BA reads the new run. Status codes: `[OPEN]` open, `[WORK]` in progress, `[DONE]` done,
+      `[BLKD]` blocked, `[CNCL]` cancelled.
+    example: FUP-001 "Trace the OC/AC calculator through all four steps".
+    appears_in: [Docs tab → follow-ups]
+    labels: [Follow-up, FUP]
+    related: [mode, analysis-session, crawler-open-question]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: analysis-session
+    term: Analysis session
+    category: beetle
+    group: BA workflow
+    placement: intro
+    short: One sitting of the BA agent, showing which runs it read, which passes it made, which records it wrote and which gaps it left.
+    explanation: |
+      The BA agent starts a session with the runs it will analyse, works through its seven passes,
+      and finishes with a summary and a list of gaps. The session page is the BA's work log: it
+      tells you what the documentation is based on and what it does not cover.
+    appears_in: [Docs tab → Session page]
+    labels: [Analysis session, Session, Input runs]
+    related: [analysis-pass, gaps, documentation-record]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: analysis-pass
+    term: Pass
+    category: beetle
+    group: BA workflow
+    short: One of the BA agent's seven read-throughs of the evidence, each looking for one kind of thing.
+    explanation: |
+      The passes run in order: 1 inventory (screens), 2 capabilities, 3 processes and use cases,
+      4 rules and requirements, 5 data items and glossary terms, 6 non-functional requirements,
+      7 synthesis (assumptions, remaining open questions, gaps). Each pass records a one-to-three
+      line summary on the session page.
+    appears_in: [Session page → Passes]
+    labels: [Pass, Passes]
+    related: [analysis-session, gaps]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: gaps
+    term: Gaps
+    category: beetle
+    group: BA workflow
+    placement: intro
+    short: What the BA could not document from the evidence it had, listed so nobody assumes it was covered.
+    explanation: |
+      A gap is an honest "not known": a screen never reached, a rule that would need a submit,
+      behaviour that cannot be observed from the outside (back-office work, e-mails). Gaps usually
+      lead to a follow-up task or an open question.
+    appears_in: [Session page → Gaps]
+    labels: [Gaps]
+    related: [analysis-session, follow-up-task]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: record-key
+    term: Record key
+    category: beetle
+    group: Records and review
+    short: The stable id of a documentation record, a kind prefix plus a number such as REQ-007 or BR-012, never reused even after the record is withdrawn.
+    explanation: |
+      Prefixes: CAP capability, SCR screen, PROC process, UC use case, REQ requirement, NFR
+      non-functional requirement, BR business rule, GL glossary term, DI data item, ASM assumption,
+      OQ open question, FUP follow-up. Numbers count up per portal and kind. Use the key when you
+      refer to a record in a comment or a test tag.
+    example: 'BR-012 "Contact form: required fields, lengths and formats".'
+    appears_in: [Docs tab, everywhere a record is listed]
+    labels: [Key, Record]
+    related: [documentation-record, revision]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: revision
+    term: Revision (Rev)
+    category: beetle
+    group: Records and review
+    short: A numbered version of a record, created each time the BA changes it, with older revisions kept and reviews applying to one exact revision.
+    explanation: |
+      A record never changes in place. Every change adds revision n+1; you can read the full
+      history on the record page. A review always names the revision it judged, so a confirmation
+      cannot silently carry over to text nobody approved.
+    appears_in: [Record page → Revision history, Rev column]
+    labels: [Rev, Revision, Revision history]
+    related: [record-status, review, record-key]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: record-status
+    term: Record status
+    category: beetle
+    group: Records and review
+    short: The state of a record's revision, either draft, confirmed, rejected, superseded or withdrawn, worked out by code from the revisions and reviews.
+    explanation: |
+      - `[DRFT]` draft: written, not yet reviewed.
+      - `[ OK ]` confirmed: a person approved this revision.
+      - `[RJCT]` rejected: a person sent it back.
+      - `[OLD.]` superseded: a newer revision replaced this draft, or a newer revision was
+        confirmed.
+      - `[WDRN]` withdrawn: the BA retracted the record.
+
+      Only the latest draft can be confirmed or rejected. Nobody sets a status by hand, not the
+      BA agent and not the dashboard; it follows from the reviews.
+    appears_in: [Docs tab → Status, Record page]
+    labels: [Status, Status now, DRFT, RJCT, OLD., WDRN]
+    related: [revision, review, status-codes]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: status-codes
+    term: Four-letter status codes
+    category: beetle
+    group: Reading the dashboard
+    short: The bracketed labels such as [DRFT] or [BNDY], a fixed-width short form of the status word printed next to them.
+    explanation: |
+      The dashboard prints every status as a four-character code in brackets, followed by the full
+      word, so columns line up. Muted codes mean "the system did what it should" (a safety skip,
+      a boundary), and red ones mean something needs attention.
+
+      | Where | Codes |
+      |---|---|
+      | Runs | `[ OK ]` completed, `[RUN.]` running, `[STOP]` stopped on a warning, `[INT.]` interrupted |
+      | Frontier | `[PEND]` pending, `[DONE]` done, `[SKIP]` skipped (unsafe, out of scope, denylisted, robots, budget), `[FAIL]` unreachable |
+      | Decision log | `[SKIP]` skip, `[RFSE]` refuse, `[MRGE]` merge, `[SPLT]` split, `[WARN]` warning, `[NOTE]` note |
+      | Trace | `[ OK ]` ok, `[RUN.]` running, `[RFSE]` refused, `[STOP]` stopped, `[FAIL]` error, `[INCM]` unfinished, `[PHSE]` phase, `[EVNT]` event |
+      | Records | `[DRFT]` draft, `[ OK ]` confirmed, `[RJCT]` rejected, `[OLD.]` superseded, `[WDRN]` withdrawn |
+      | Reviews | `[ OK ]` confirm, `[RJCT]` reject, `[NOTE]` comment |
+      | Follow-ups | `[OPEN]` open, `[WORK]` in progress, `[DONE]` done, `[BLKD]` blocked, `[CNCL]` cancelled |
+      | Process outcome | `[ OK ]` goal reached, `[BNDY]` boundary reached, `[STOP]` stopped, `[ABND]` abandoned |
+    appears_in: [Every status column]
+    labels: ["[ OK ]", "[DRFT]", "[BNDY]", "[SKIP]"]
+    related: [record-status, run, frontier, submit-boundary]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: target
+    term: Target
+    category: beetle
+    group: Reading the dashboard
+    short: In a record's evidence table, the piece of recorded data the record cites, such as a state, form, action, network call or process step.
+    explanation: |
+      Each evidence link on a record points at one target and says what it supports. Target kinds
+      are state, edge (transition), action, form, network call, rule candidate, open question,
+      decision, process, process step, another documentation record, or a review. Click the target
+      to open it on its run page.
+
+      Until R-22 the Actions table also had a "Target" column for a link's address; it is now
+      called "Links to", so "Target" has only this meaning.
+    appears_in: [Record page → Evidence → Target]
+    labels: [Target]
+    related: [evidence-link, evidence]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: srs-export
+    wiki: software-requirements-specification
+    term: SRS export
+    category: beetle
+    group: Records and review
+    short: A folder of Markdown files (with Mermaid diagrams) plus records.json that renders a portal's documentation as one SRS a team could rebuild the portal from.
+    explanation: |
+      `pnpm docs:export <portal> [--env <env>] [--confirmed-only]` in `apps/crawler` writes
+      `data/exports/<portal>-<env>-srs/`: a README, chapters 01–10 in an ISO/IEC/IEEE 29148-style
+      outline, `11-unknowns.md`, `12-traceability.md`, a change log and `records.json`, a
+      machine-readable copy of the same records. Every statement keeps its key, revision, status,
+      confidence and evidence references; no evidence files or request bodies are copied. The
+      export is deterministic: the same store gives byte-identical files, so two exports can be
+      compared with `diff -r`.
+    example: "sample-insurer (sandbox, all, drafts marked): 15 files, 158 records."
+    appears_in: ["data/exports/<portal>-<env>-srs/", "`pnpm docs:export`"]
+    labels: [Export, SRS export, records.json]
+    related: [srs, confirmed-only-mode, traceability-matrix, unknowns, documentation-record]
+    changed_in: R-16
+    changed_on: 2026-10-04
+
+  - id: confirmed-only-mode
+    term: Confirmed-only mode
+    category: beetle
+    group: Records and review
+    short: The SRS export mode that renders only revisions a reviewer confirmed, leaving out drafts.
+    explanation: |
+      By default the export renders every current record and marks drafts with a "DRAFT — not
+      confirmed by a reviewer" callout. With `--confirmed-only` it renders each record's latest
+      confirmed revision (the confirmed baseline when a newer draft exists) and nothing else, so the
+      output contains only statements a person has signed off. Rejected and withdrawn records
+      appear only in the change log, in both modes.
+    appears_in: ["`pnpm docs:export --confirmed-only`"]
+    labels: [--confirmed-only, Confirmed only, drafts marked]
+    related: [srs-export, record-status, review]
+    changed_in: R-16
+    changed_on: 2026-10-04
+
+  # ---- BA: statements and traceability ------------------------------------------------------------
+  - id: confidence
+    term: Confidence (observed / inferred / needs confirmation)
+    category: ba
+    group: Statements and traceability
+    short: How sure a statement is, either observed in the evidence, inferred as a reasonable deduction, or needing confirmation from someone who knows the business.
+    explanation: |
+      - `observed`: seen in the UI, network traffic or data.
+      - `inferred`: deduced from what was seen, but not directly visible.
+      - `needs_confirmation`: about intent or the reason behind behaviour, which only a person can
+        confirm.
+
+      The app shows what it does, never why. Keeping the three apart is the main protection against
+      documentation that reads as fact but is a guess.
+    appears_in: [Confidence column on states, actions and records]
+    labels: [Confidence, observed, inferred, needs_confirmation]
+    related: [documentation-record, evidence-link, assumption]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: documentation-record
+    term: Documentation record
+    category: ba
+    group: Statements and traceability
+    short: One unit of the BA's documentation, such as a screen, requirement or rule, with a key, revisions, evidence links and a status.
+    explanation: |
+      Beetle's documentation is a set of small linked records rather than one long document.
+      There are twelve kinds (see Record key for the prefixes). The SRS export renders them into a
+      readable document.
+    appears_in: [Docs tab, SRS export]
+    labels: [Records, Record]
+    related: [record-key, revision, relations, layers, srs-export]
+    changed_in: R-16
+    changed_on: 2026-10-04
+
+  - id: evidence-link
+    wiki: traceability
+    term: Evidence link / cites
+    category: ba
+    group: Statements and traceability
+    short: The link from a record to the recorded data that supports it, and a record without at least one is not allowed.
+    explanation: |
+      Each revision cites its evidence: a target plus a note on what it supports. The "Cites"
+      column counts them and the record page lists them, so any statement can be checked against
+      what the crawler actually recorded.
+    appears_in: [Records → Cites, Record page → Evidence]
+    labels: [Cites, Evidence, What it supports]
+    related: [target, evidence, traceability]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: relations
+    wiki: traceability
+    term: Relations / linked records
+    category: ba
+    group: Statements and traceability
+    short: Typed links between records, such as a rule that enforces a requirement or a field that appears on a screen.
+    explanation: |
+      Relation types: `contains`, `describes`, `refines`, `enforces`, `appears_on`, `uses_term`,
+      `synonym_of`, `answers`, `depends_on`. Relations belong to the revision that states them, so
+      they change with the record.
+    example: On sample-insurer the most common are uses_term (44), appears_on (41) and contains (39).
+    appears_in: [Record page → Relations, Linked records]
+    labels: [Relations, Linked records]
+    related: [documentation-record, traceability]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: traceability
+    wiki: traceability
+    term: Traceability
+    category: ba
+    group: Statements and traceability
+    short: Being able to follow a requirement back to where it came from and forward to what depends on or tests it.
+    explanation: |
+      In Beetle, backward traceability is built in: every record cites evidence and the
+      evidence names its run. Forward traceability runs through relations (rule → requirement →
+      use case) and, later, through test tags such as `@REQ-007`. The SRS export includes a
+      traceability matrix.
+    appears_in: [Record page, SRS export]
+    labels: [Traceability]
+    related: [evidence-link, relations, srs, traceability-matrix]
+    changed_in: R-16
+    changed_on: 2026-10-04
+
+  - id: traceability-matrix
+    wiki: traceability
+    term: Traceability matrix
+    category: ba
+    group: Statements and traceability
+    short: A table that links each requirement, rule or use case to its related records, the evidence it cites and the run that evidence came from.
+    explanation: |
+      The SRS export writes it as `12-traceability.md`: one row per requirement (REQ), business
+      rule (BR) or use case (UC), then its related records, each evidence link (kind, id, note) and
+      the run (id, mode, date). It answers "where did this statement come from?" for a reader who
+      has only the exported files, without the dashboard.
+    example: "BR-030 (WIOSNA10 takes 10% off) → UC-002 → state on /kalkulator/wynik → trace run of FUP-009."
+    appears_in: [SRS export → 12-traceability.md]
+    labels: [Traceability matrix, 12-traceability.md]
+    related: [traceability, srs-export, evidence-link]
+    changed_in: R-16
+    changed_on: 2026-10-04
+
+  - id: unknowns
+    term: Unknowns
+    category: ba
+    group: Statements and traceability
+    short: The SRS export's chapter listing everything the documentation could not establish, so a team rebuilding the portal knows what is still open.
+    explanation: |
+      `11-unknowns.md` collects records flagged not observable, records with confidence
+      `needs_confirmation`, open and blocked follow-ups, open questions, and evidence links whose
+      target no longer exists. Documentation built from the outside always has gaps (back-office
+      behaviour, pages behind a login); this chapter makes them explicit instead of hiding them.
+    example: "PROC-005..008 (login and customer area, no test account) and OQ-007 (what happens after \"Wniosek przyjęty\")."
+    appears_in: [SRS export → 11-unknowns.md]
+    labels: [Unknowns, 11-unknowns.md]
+    related: [srs-export, confidence, assumption]
+    changed_in: R-16
+    changed_on: 2026-10-04
+
+  - id: review
+    wiki: requirements-validation
+    term: Review (confirm / reject / comment)
+    category: ba
+    group: Statements and traceability
+    short: A person's decision on one revision of a record, where confirm approves it, reject sends it back and comment adds a note without deciding.
+    explanation: |
+      Reviews are stored with the reviewer, time, action and revision. Reject and comment need a
+      text. Only the latest draft can be confirmed or rejected; comments can go on any revision.
+      The BA agent reads rejections and comments as feedback in its next session. In the
+      dashboard, review buttons appear only when a reviewer name is configured.
+    appears_in: [Record page → Review, Reviews]
+    labels: [Review, Reviews, Decisions on revision]
+    related: [record-status, revision]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  # ---- BA: record kinds ---------------------------------------------------------------------------
+  - id: capability
+    wiki: business-capability
+    term: Capability (CAP)
+    category: ba
+    group: Record kinds
+    short: Something the business offers its users at a high level, such as quoting car insurance, grouping the screens and processes that deliver it.
+    explanation: |
+      Capabilities give the big picture before the details. The BA writes them in pass 2 and links
+      them to screens and processes with `contains`.
+    example: CAP-001 "Product information and help content".
+    appears_in: [Docs tab → Capabilities]
+    labels: [Capability, CAP]
+    related: [screen, process-record]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: screen
+    term: Screen (SCR)
+    category: ba
+    group: Record kinds
+    short: One page or view of the portal as the BA documents it, with its purpose, route templates, elements and how you reach it.
+    explanation: |
+      A screen usually corresponds to one cluster of states. It lists the elements by role and
+      verbatim label, so it doubles as a description a developer could rebuild the page from.
+    example: SCR-001 "Home page with global header and footer".
+    appears_in: [Docs tab → Screens]
+    labels: [Screen, SCR]
+    related: [cluster, state, data-item]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: process-record
+    wiki: process-modelling-as-is
+    term: Process (PROC)
+    category: ba
+    group: Record kinds
+    short: A business process as the BA documents it, with its goal, persona, trigger, steps and outcome, based on trace runs.
+    explanation: |
+      The documented counterpart of a traced process. It also records how far the evidence goes
+      (`observed_extent`), for example "up to the submit boundary", so nobody assumes the end of the
+      process was seen.
+    example: PROC-001 "Calculate an OC/AC premium".
+    appears_in: [Docs tab → Processes]
+    labels: [Process, PROC]
+    related: [trace-process, use-case, capability]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: use-case
+    wiki: use-case
+    term: Use case (UC)
+    category: ba
+    group: Record kinds
+    short: One actor's goal told as a flow, with a main path and the alternative and exception paths, written in Cockburn style.
+    explanation: |
+      Use cases turn a process into something a team can build and test against: who wants what,
+      the steps that work, and every way it can go differently.
+    example: UC-001 "Guest calculates an OC/AC premium".
+    appears_in: [Docs tab → Use cases]
+    labels: [Use case, UC]
+    related: [process-record, requirement, acceptance-criteria]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: requirement
+    wiki: requirement
+    term: Requirement (REQ)
+    category: ba
+    group: Record kinds
+    short: A statement of what the system must do, written so that it can be tested.
+    explanation: |
+      Requirements describe behaviour the rebuilt system must keep. Each has acceptance criteria
+      and cites the evidence it was derived from. They become `confirmed` only through a person's
+      review.
+    example: REQ-001 "Global menu and footer on every page".
+    appears_in: [Docs tab → Requirements]
+    labels: [Requirement, REQ]
+    related: [nfr, acceptance-criteria, business-rule]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: nfr
+    wiki: non-functional-requirement
+    term: Non-functional requirement (NFR)
+    category: ba
+    group: Record kinds
+    short: A quality the system must have rather than a function it performs, such as speed, accessibility or reliable navigation.
+    explanation: |
+      Beetle writes NFRs only for what it actually measured (status codes, console errors,
+      labels, robots policy). Qualities it could not measure go to the gaps instead.
+    example: NFR-004 "No broken internal navigation for a guest".
+    appears_in: [Docs tab → NFRs]
+    labels: [NFR]
+    related: [requirement, gaps]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: acceptance-criteria
+    wiki: acceptance-criteria
+    term: Acceptance criteria
+    category: ba
+    group: Record kinds
+    short: The concrete conditions that show a requirement is met, written as Given, When, Then.
+    explanation: |
+      Each criterion is a small scenario: given a starting situation, when the user does something,
+      then the system responds in a stated way. They are what QA turns into tests.
+    appears_in: [Requirement page → Acceptance criteria]
+    labels: [Acceptance criteria]
+    related: [requirement, use-case]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: business-rule
+    wiki: business-rule
+    term: Business rule (BR)
+    category: ba
+    group: Record kinds
+    short: A rule the business imposes regardless of screen layout, such as which fields are required or which values are allowed.
+    explanation: |
+      Rules are written once and linked to every requirement, data item and screen they affect
+      (`enforces`, `appears_on`). Complex rules use a decision table.
+    example: 'BR-012 "Contact form: required fields, lengths and formats".'
+    appears_in: [Docs tab → Business rules]
+    labels: [Business rule, BR, Rule]
+    related: [decision-table, rule-candidate, data-item]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: decision-table
+    wiki: decision-table
+    term: Decision table
+    category: ba
+    group: Record kinds
+    short: A table listing combinations of conditions and the outcome for each, used for rules with several inputs.
+    explanation: |
+      In a business rule, the "if" columns are conditions and the "then" columns are results; each
+      row is one combination. It makes missing or contradictory cases easy to spot.
+    appears_in: [Business rule page → if / then columns]
+    labels: [if, then]
+    related: [business-rule]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: data-item
+    wiki: data-dictionary
+    term: Data item (DI)
+    category: ba
+    group: Record kinds
+    short: One piece of data the portal handles, such as a phone number field, with its verbatim label, type, format and observed constraints.
+    explanation: |
+      Data items form the data dictionary. The label is kept exactly as the portal shows it, and
+      the constraints are those observed (required, pattern, length, options). `seen_in` says where
+      it appears.
+    example: DI-015 "Telefon".
+    appears_in: [Docs tab → Data items]
+    labels: [Data item, DI]
+    related: [business-rule, glossary-term, network-call-shape]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: glossary-term
+    wiki: glossary
+    term: Glossary term (GL)
+    category: ba
+    group: Record kinds
+    short: A business word the documented portal uses, kept verbatim with its meaning, such as "OC".
+    explanation: |
+      These are the portal's terms, written by the BA agent. They are a different thing from this
+      glossary, which explains Beetle's own words.
+    example: GL-001 "OC".
+    appears_in: [Docs tab → Glossary]
+    labels: [Glossary term, GL]
+    related: [data-item]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: assumption
+    wiki: assumption
+    term: Assumption (ASM)
+    category: ba
+    group: Record kinds
+    short: Something the BA treats as true without proof, written down so it can be checked later.
+    explanation: |
+      An assumption is honest about its uncertainty and lets the work continue. Each one should be
+      confirmed or replaced once someone who knows the business has looked at it.
+    example: ASM-002 "Contact enquiries are answered by phone or e-mail".
+    appears_in: [Docs tab → Assumptions]
+    labels: [Assumption, ASM]
+    related: [confidence]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  - id: srs
+    wiki: software-requirements-specification
+    term: SRS
+    category: ba
+    group: Record kinds
+    short: Software Requirements Specification, the complete requirements document a team could rebuild the system from.
+    explanation: |
+      Beetle keeps requirements as linked records; the SRS export (`pnpm docs:export`) renders
+      them into one document with chapters, diagrams, a traceability matrix and an Unknowns section.
+    appears_in: [SRS export]
+    labels: [SRS]
+    related: [traceability, documentation-record, as-is-documentation, srs-export]
+    changed_in: R-16
+    changed_on: 2026-10-04
+
+  - id: as-is-documentation
+    wiki: process-modelling-as-is
+    term: As-is documentation
+    category: ba
+    group: Record kinds
+    short: A description of how an existing system works today, as opposed to a to-be design of how it should work.
+    explanation: |
+      Beetle only documents the as-is system, from the outside, so that it can be rebuilt. It
+      never proposes improvements in the documentation; those belong in a separate to-be design.
+    appears_in: [Overall purpose of the Docs tab]
+    labels: [As-is]
+    related: [srs, layers]
+    changed_in: R-22
+    changed_on: 2026-10-03
+
+  # ---- Beetle: the demo site, login and gates (spec 009) -------------------------------
+  - id: demo-site
+    term: Demo site
+    category: beetle
+    group: Demo site
+    short: A deliberately awkward legacy estate (shop, bank, insurer and old pages) that Beetle runs locally to prove it can cope with known legacy obstacles.
+    explanation: |
+      The demo site (`apps/demo-site`) is a fictional Polish group, Grupa Mokradło, with
+      three brands. A Django backend serves a React shell, micro-frontends, server-rendered legacy
+      pages, CMS texts and a login. Each screen reproduces one or more entries of the legacy
+      obstacle catalogue. Like the reference portal it has a written answer key (ground truth),
+      one file per brand. Its data is disposable and may be changed, submitted and reset at will.
+    example: The bank's Historia operacji page is an iframe around an old frameset page.
+    appears_in: [Docs tab → demo-site-shop, demo-site-bank, demo-site-insurer]
+    labels: [estate, Grupa Mokradło]
+    related: [sample-portal, legacy-obstacle, quality-gate]
+    changed_in: R-25
+    changed_on: 2026-10-05
+
+  - id: legacy-obstacle
+    term: Legacy obstacle (catalogue)
+    category: beetle
+    group: Demo site
+    short: A thing that makes a legacy portal hard to map or document, such as a frameset or a missing label, listed under a stable LO- id in the obstacle catalogue.
+    explanation: |
+      `docs/legacy-obstacles.md` is a living catalogue. Each entry has an id (LO-01, LO-02, …;
+      never reused), the place in the demo site that reproduces it, what Beetle is
+      expected to do, a source and a status (`proposed`, `in scope`, `later`, `withdrawn`). The
+      quality gates hold one set of assertions per in-scope entry, and the evaluator scores an
+      obstacles category: did the BA's records name the obstacles the portal contains.
+    example: LO-10, a "button" that is a div with a click handler and no role.
+    appears_in: [docs/legacy-obstacles.md, data/gates/report.json]
+    labels: [LO-xx, obstacle]
+    related: [demo-site, quality-gate, known-gap, eval]
+    changed_in: R-25
+    changed_on: 2026-10-05
+
+  - id: credential-vault
+    term: Credential vault
+    category: beetle
+    group: Login and credentials
+    short: The encrypted store of test-user logins and passwords that the crawler server reads, so that no secret is ever written in a config file or shown to the agent.
+    explanation: |
+      Values live in the `credentials` table of the environment's database, one row per portal,
+      environment and reference name, sealed with AES-256-GCM. You manage them with
+      `pnpm vault` in `apps/crawler` (`set`, `list`, `delete`, `generate`, `check`, `reveal`).
+      Only the server decrypts a value, and only to type it into a login form. Values are never
+      logged, exported or shown in the dashboard.
+    example: pnpm vault list shows names and key ids, never values.
+    appears_in: [pnpm vault]
+    labels: [vault]
+    related: [vault-key, credential-ref, secret-redactor, server-side-login]
+    changed_in: R-26
+    changed_on: 2026-10-05
+
+  - id: vault-key
+    term: Vault key
+    category: beetle
+    group: Login and credentials
+    short: The one local key file that seals and opens the vault, kept outside the repository and the database.
+    explanation: |
+      The key is created on first use and read from `BEETLE_VAULT_KEY_FILE` (or the default
+      path). Each row remembers a key id. If the key changes, old rows are refused with a message
+      asking you to enter the value again. The key is not part of any export. Tests use a
+      temporary key and fake values.
+    appears_in: [pnpm vault errors]
+    labels: [key file, BEETLE_VAULT_KEY_FILE]
+    related: [credential-vault]
+    changed_in: R-26
+    changed_on: 2026-10-05
+
+  - id: credential-ref
+    term: Credential reference (ref:NAME)
+    category: beetle
+    group: Login and credentials
+    short: A placeholder such as `ref:PG_BANK_PASSWORD` in a persona file that stands for a vault value, so the file holds the name and never the secret.
+    explanation: |
+      A persona's `auth` block lists `ref:NAME` values. When a run starts, the server resolves
+      every reference against the vault for that portal and environment. A missing one stops the
+      run before the browser opens and says which name to add (`pnpm vault check <portal>
+      <persona>` lists them). A persona with references on a portal that has no login block is
+      refused.
+    example: "`password: ref:PG_BANK_PASSWORD` in personas/demo-site-bank/client.yaml."
+    appears_in: [Persona files → auth]
+    labels: [ref]
+    related: [persona, credential-vault, login-block]
+    changed_in: R-26
+    changed_on: 2026-10-05
+
+  - id: login-block
+    term: Login block
+    category: beetle
+    group: Login and credentials
+    short: The part of a portal config that tells the server how to log in, where the form is, how to find its controls and how to tell success, failure and an expired session.
+    explanation: |
+      The `login:` block in `portal.yaml` gives the login URL, a locator for each control (label,
+      placeholder or CSS, first match wins), the success and failure signs and the signs of an
+      expired session. The agent never sees selectors; the server uses the block for the login
+      tool and for re-login.
+    appears_in: [Portal config → login]
+    labels: [login]
+    related: [server-side-login, re-login, credential-ref]
+    changed_in: R-26
+    changed_on: 2026-10-05
+
+  - id: server-side-login
+    term: Server-side login
+    category: beetle
+    group: Login and credentials
+    short: The `login` tool lets the agent ask for a login, and the server types the vault values into the form itself, so the agent never handles a secret.
+    explanation: |
+      The agent calls `login` with a reason. The server fills the form, submits it and records the
+      landing page like a navigation. The result says `logged_in` or `failed` with a reason
+      (`rejected`, `captcha`, `locked`, `control_not_found`). Tracing is paused during the fill,
+      and the values never reach the tool result, the records or the logs. Login is refused on
+      production.
+    appears_in: [Run page → decisions (login)]
+    labels: [login tool]
+    related: [login-block, credential-vault, secret-redactor, re-login, captcha-handoff]
+    changed_in: R-26
+    changed_on: 2026-10-05
+
+  - id: re-login
+    term: Re-login
+    category: beetle
+    group: Login and credentials
+    short: When a session expires mid-run, the server logs in again by itself and returns to the page the agent was going to.
+    explanation: |
+      After each page of a logged-in run, the server checks the login block's expiry signs. On a
+      match it logs in once, navigates back and writes a `relogin` decision. The agent's call
+      returns the target state with `relogged_in: true`. If the re-login fails, the call returns
+      `SESSION_LOST` and the run is marked login-blocked. A re-login is a crawler event, not a step
+      of any business process.
+    appears_in: [Run page → decisions (relogin)]
+    labels: [relogin, session expired]
+    related: [server-side-login, login-block, decision]
+    changed_in: R-26
+    changed_on: 2026-10-05
+
+  - id: captcha-handoff
+    term: Hand-off (CAPTCHA)
+    category: beetle
+    group: Login and credentials
+    short: On a sandbox or staging portal, a CAPTCHA does not stop the run; the crawler records it, asks for a human and carries on with the rest.
+    explanation: |
+      The crawler never solves a CAPTCHA. Off production, it records the state, writes a `handoff`
+      decision, skips actions inside the CAPTCHA container and opens a crawler question
+      `Human needed: CAPTCHA on <route template>`. On production a CAPTCHA is still a block and
+      the run stops with a warning. A CAPTCHA on the login page marks the run login-blocked.
+    example: "Human needed: CAPTCHA on /sklep/zamowienie"
+    appears_in: [Run page → open questions, decisions (handoff)]
+    labels: [handoff, Human needed]
+    related: [crawler-open-question, server-side-login, decision, environment]
+    changed_in: R-26
+    changed_on: 2026-10-05
+
+  - id: secret-redactor
+    term: Secret redactor
+    category: beetle
+    group: Login and credentials
+    short: A filter that replaces every resolved secret value with `[secret]` before text is logged, stored or returned.
+    explanation: |
+      Every value resolved from the vault is registered with the redactor. It also catches the
+      URL-encoded and JSON-escaped forms and ignores values shorter than four characters. It
+      covers logs, the decision log, tool results and trace errors. A test greps the data folder
+      for the password after a login run and expects no hit.
+    appears_in: ["[secret] in logs and records"]
+    labels: ["[secret]"]
+    related: [credential-vault, server-side-login, pii-scrubbing]
+    changed_in: R-26
+    changed_on: 2026-10-05
+
+  - id: quality-gate
+    term: Quality gate (tier 1)
+    category: beetle
+    group: Gates and evals
+    short: A fast, deterministic test that runs the crawler against the demo site and checks one legacy obstacle or one earlier finding, with no model and no cost.
+    explanation: |
+      Gates live in `apps/crawler/packages/gates` and run inside `pnpm test`. The setup starts the
+      demo site on ports 4200 and 4201 and the reference portal, then each gate drives the
+      server tools directly and asserts what was recorded. A coverage test fails when an in-scope
+      catalogue entry has no gate. Gates test Beetle's mechanics; they say nothing about how
+      well the agents decide.
+    appears_in: [pnpm test, data/gates/report.json]
+    labels: [gate, tier 1]
+    related: [legacy-obstacle, known-gap, gate-report, eval]
+    changed_in: R-27
+    changed_on: 2026-10-05
+
+  - id: known-gap
+    term: Known gap
+    category: beetle
+    group: Gates and evals
+    short: A gate for an obstacle Beetle does not handle yet; it describes the wanted behaviour, is expected to fail and keeps the run green.
+    explanation: |
+      The report lists known gaps apart from passes. The day the assertions pass, the case fails
+      with "known gap is fixed", so it is turned into a normal gate and stays fixed.
+    appears_in: [data/gates/report.json → known_gap]
+    labels: [gap(), known_gap]
+    related: [quality-gate, gate-report, legacy-obstacle]
+    changed_in: R-27
+    changed_on: 2026-10-05
+
+  - id: gate-report
+    term: Gate report
+    category: beetle
+    group: Gates and evals
+    short: The file `data/gates/report.json` that every test run writes, listing each gate's result and the catalogue entries that have no gate.
+    explanation: |
+      It holds one case per gate (id, title, result, time), the uncovered ids and a summary count.
+      Results are `pass`, `fail`, `known_gap`, `gap_fixed` and `skipped_slow`. The file is
+      generated and ignored by git.
+    appears_in: [data/gates/report.json]
+    related: [quality-gate, known-gap, slow-gate]
+    changed_in: R-27
+    changed_on: 2026-10-05
+
+  - id: slow-gate
+    term: Slow gate
+    category: beetle
+    group: Gates and evals
+    short: A gate that has to wait in real time (a session expiry, several fresh browsers), so `pnpm test` skips it and `pnpm test:slow` runs it.
+    explanation: |
+      Slow gates keep the normal test run inside its 3-minute budget. They are still counted for
+      coverage, and the gate report lists them as `skipped_slow` when they did not run.
+      `pnpm test:slow` runs the whole gate set with them, together with the browser end-to-end
+      files (the slow tier).
+    appears_in: [pnpm test:slow, data/gates/report.json → skipped_slow]
+    labels: [slow, skipped_slow]
+    related: [quality-gate, gate-report, slow-tier]
+    changed_in: R-34
+    changed_on: 2026-10-07
+
+  - id: eval
+    term: Eval (tier 2)
+    category: beetle
+    group: Gates and evals
+    short: A real, paid run of the crawler and BA agents on one portal, scored against its ground truth and compared with a saved baseline.
+    explanation: |
+      `pnpm eval <portal>` in `apps/crawler` runs one trial of one task: it starts the headless
+      agents with a budget cap, lets the graders score the outcome and writes
+      `data/evals/<portal>/<timestamp>.json`. It then compares the scores and checks with the
+      baseline and exits with 1 on a regression. It is never part of `pnpm test`, because it costs
+      tokens and agents are not deterministic. It is how you see whether a change to a prompt, a
+      skill or the tools made the agents better or worse. `--crawler-only` skips the BA.
+      When an agent is cut off by an API error or the account's usage limit, the eval writes no
+      result at all, so an outage is never scored as agent quality. Run evals one at a time: they
+      spend the same usage quota as your Claude Code session. The code is `apps/crawler/evals/`,
+      its words are Anthropic's eval terms (guideline G-33), and new evals follow the
+      `create-eval` skill.
+    appears_in: [pnpm eval, apps/crawler/evals]
+    labels: [tier 2, pnpm eval, crawler-only]
+    related: [eval-task, eval-trial, grader, eval-baseline, eval-workspace, coverage-score, crawl-coverage-score, password-sweep, quality-gate]
+    changed_in: R-46
+    changed_on: 2026-10-10
+
+  - id: eval-task
+    term: Eval task / suite
+    category: beetle
+    group: Gates and evals
+    short: One test the eval can run, a portal with its ground truth and success criteria; all tasks together are the evaluation suite.
+    explanation: |
+      Tasks are listed in `SUITE` in `apps/crawler/evals/tasks.ts`. A map task has the crawler
+      map the whole portal; a trace task has it walk one named process toward a goal and is also
+      graded on that process's steps (e.g. `wikisite`, "find the article about pickled
+      cucumbers"). A task for a live site we don't own starts no local server and keeps its ground
+      truth in `apps/crawler/evals/ground-truth/`.
+    appears_in: [apps/crawler/evals/tasks.ts]
+    labels: [task, suite, SUITE, trace task]
+    related: [eval, eval-trial, sample-portal]
+    changed_in: R-46
+    changed_on: 2026-10-10
+
+  - id: eval-trial
+    term: Eval trial
+    category: beetle
+    group: Gates and evals
+    short: One attempt at a task, one `pnpm eval` run; agents differ from run to run, so a task needs several trials before a score means much.
+    explanation: |
+      Each trial writes one result file in `data/evals/<portal>/`, promoted or not. The baseline
+      is a copy of the trial chosen as the standard. Comparing one trial with the baseline can
+      catch a regression only beyond the normal spread, which is what `tolerances.json` allows for.
+    appears_in: [data/evals/<portal>/<timestamp>.json]
+    labels: [trial]
+    related: [eval, eval-task, eval-baseline]
+    changed_in: R-46
+    changed_on: 2026-10-10
+
+  - id: grader
+    term: Grader
+    category: beetle
+    group: Gates and evals
+    short: The logic that turns a finished trial into one score or check; code-based, model-based (an LLM judge) or human.
+    explanation: |
+      Graders live in `apps/crawler/evals/graders/`, one folder per kind. Code-based ones
+      (`graders/code/`): documentation coverage, crawl coverage, process steps of a trace, the
+      password sweep and the run checks. Model-based ones are judges (`graders/model/`), which
+      answer one narrow question per call and are trusted only once they agree with the owner's
+      labels, the human grader (`graders/human/labels/`).
+    appears_in: [apps/crawler/evals/graders]
+    labels: [grader, code-based, model-based, LLM judge]
+    related: [eval, judge, judge-calibration, coverage-score, crawl-coverage-score, password-sweep]
+    changed_in: R-47
+    changed_on: 2026-10-11
+
+  - id: eval-baseline
+    term: Eval baseline
+    category: beetle
+    group: Gates and evals
+    short: The saved result an eval is compared with; a score may fall below it only by the portal's tolerance.
+    explanation: |
+      `data/evals/<portal>/baseline.json` is set with `pnpm eval <portal> --promote`, which moves
+      the old baseline to `history/`. `tolerances.json` in the same folder sets how many
+      percentage points each score may drop (default 5, widened per category where two runs of
+      the same map differed). A check that was true in the baseline must stay true; the
+      password-hit and widget-action counts must be 0 in every run, baseline or not, and a run
+      that breaks them is never promoted. Baselines are committed.
+    appears_in: [data/evals/<portal>/baseline.json, data/evals/<portal>/tolerances.json]
+    labels: [baseline, tolerance, promote]
+    related: [eval, coverage-score, crawl-coverage-score, password-sweep]
+    changed_in: R-29
+    changed_on: 2026-10-09
+
+  - id: crawl-coverage-score
+    term: Crawl coverage score
+    category: beetle
+    group: Gates and evals
+    short: How many of the portal's ground-truth screens the crawler itself reached in an eval, apart from what the BA documented.
+    explanation: |
+      `crawl_screens` in an eval result. A guest persona is scored on the screens a guest can see;
+      a logged-in persona on the screens behind the login. A screen counts when one of the run's
+      states has its route (parameter names do not matter: `:slug` and `:param` match). A low
+      documentation score with a high crawl score points at the BA; a low crawl score points at
+      the crawler.
+    appears_in: [data/evals/<portal>/*.json → scores.crawl_screens]
+    labels: [crawl_screens]
+    related: [eval, coverage-score]
+    changed_in: R-29
+    changed_on: 2026-10-09
+
+  - id: password-sweep
+    term: Password sweep
+    category: beetle
+    group: Gates and evals
+    short: The eval's search for the portal's test passwords in everything a run left behind; it must find none.
+    explanation: |
+      After both agents ran, the eval searches the store (except the vault's encrypted rows), every
+      file of the run (evidence, logs, unzipped traces), the documentation export and both agents'
+      transcripts for every password the vault holds for the portal, guest runs included. The
+      count is `password_hits`; anything above 0 fails the eval. It prints only counts per place,
+      never a password.
+    appears_in: [data/evals/<portal>/*.json → checks.password_hits]
+    labels: [password_hits]
+    related: [eval, credential-vault]
+    changed_in: R-29
+    changed_on: 2026-10-09
+
+  - id: eval-workspace
+    term: Eval workspace
+    category: beetle
+    group: Gates and evals
+    short: A fresh temporary root where an eval's agents record, so your own database and documentation are never touched.
+    explanation: |
+      By default an eval copies the portal and persona configs, the migrations and the persona's
+      encrypted credential rows into a temp folder and points the agents there, so every eval
+      starts from nothing. With `--in-place` it uses the real store instead, and the runs then show
+      in the dashboard.
+    appears_in: [pnpm eval --in-place]
+    labels: [BEETLE_ROOT, in-place]
+    related: [eval, credential-vault]
+    changed_in: R-27
+    changed_on: 2026-10-05
+
+  - id: judge
+    term: Judge (LLM judge)
+    category: beetle
+    group: Gates and evals
+    short: A model-based grader that asks Claude one narrow yes/no question about one ground-truth item and one documentation record.
+    explanation: |
+      A judge is declared in one file (`apps/crawler/evals/graders/model/judges/<id>.ts`): its
+      question, what pass and fail mean, a few labelled examples, and code that picks the
+      candidate records per ground-truth item. Each call is isolated (no tools, no MCP servers,
+      an empty config folder) and answers `pass`, `fail` or `unknown` with a one-sentence reason.
+      Judge scores sit in the eval result's `judges` section, beside the code scores, and are
+      never compared with the baseline. Its wording version is a hash of the question, the
+      definitions, the examples and the model: changing any of them makes the judge
+      uncalibrated again.
+    example: The glossary-terms judge should fail a record defining "Składka" as the highest amount the insurer pays, which is the portal's meaning of "Suma ubezpieczenia".
+    appears_in: [pnpm eval, pnpm eval:judge, apps/crawler/evals/graders/model]
+    labels: [judge, LLM judge, model-based grader, verdict, wording version]
+    related: [grader, judge-labels, judge-calibration, judge-isolation-check, eval]
+    changed_in: R-47
+    changed_on: 2026-10-11
+
+  - id: judge-labels
+    term: Judge labels
+    category: beetle
+    group: Gates and evals
+    short: The owner's own pass or fail, with one sentence why, for each pair a judge is asked about; what the judge is measured against.
+    explanation: |
+      One YAML file per judge (`apps/crawler/evals/graders/human/labels/<judge>.yaml`), filled by
+      hand. `pnpm eval:draw` adds the judge's pairs from a store and never changes a pair already
+      there; pairs real output lacks can be added as `hand-made`. Each pair is put in `dev` (used
+      to tune the judge's wording) or `test` (used once per wording, for the real measure).
+    appears_in: [pnpm eval:draw, apps/crawler/evals/graders/human/labels]
+    labels: [labels, dev split, test split, hand-made pair]
+    related: [judge, judge-calibration, sample-portal]
+    changed_in: R-47
+    changed_on: 2026-10-11
+
+  - id: judge-calibration
+    term: Judge calibration
+    category: beetle
+    group: Gates and evals
+    short: Measuring how often a judge agrees with the owner's labels, as two rates (TPR and TNR) and a flip rate; a judge counts only once calibrated.
+    explanation: |
+      `pnpm eval:calibrate <judge> --split dev|test` asks the judge about every labelled pair three
+      times and compares the majority with the label. TPR (true-positive rate) is the share of the
+      owner's passes the judge also passed; TNR (true-negative rate) the share of the owner's
+      fails it also failed. Two rates, because a judge that passes everything has TPR 100 % and
+      TNR 0 %. The flip rate is the share of pairs whose three answers differed. A judge is
+      calibrated when its newest `test` report for its current wording has TPR and TNR at 90 % or
+      more. Reports: `data/evals/judges/<judge>/`.
+    appears_in: [pnpm eval:calibrate, eval result judges section]
+    labels: [calibration, TPR, TNR, true-positive rate, true-negative rate, flip rate, calibrated]
+    related: [judge, judge-labels, grader]
+    changed_in: R-47
+    changed_on: 2026-10-11
+
+  - id: judge-isolation-check
+    term: Judge isolation check
+    category: beetle
+    group: Gates and evals
+    short: One real judge call that proves nothing of your or the project's Claude setup reached the judge.
+    explanation: |
+      `pnpm eval:judge-check` makes one call and reads what Claude Code loaded for it: only the
+      answer tool, no MCP servers, no plugins, skills or agents of yours or the project's (Claude
+      Code's built-in ones are allowed), memory inside the judge's temporary config folder, and
+      under 2 000 input tokens (a leaked CLAUDE.md would add thousands). The judge logs in with the
+      token in `~/.config/beetle/judge-token` (from `claude setup-token`) or, without it, with
+      your own login.
+    appears_in: [pnpm eval:judge-check]
+    labels: [isolation check, judge-token, BEETLE_JUDGE_TOKEN_FILE]
+    related: [judge]
+    changed_in: R-47
+    changed_on: 2026-10-11
+
+  # ---- Beetle: chat and workflow (R-30) ------------------------------------------------------
+  - id: chat
+    term: Chat
+    category: beetle
+    group: Chat and workflow
+    short: The dashboard page where the BA talks to one assistant that knows where each portal stands and runs the next step for them.
+    explanation: |
+      The Chat page is the guided way in: instead of choosing between agents and skills, the BA
+      says what they want and the assistant offers only the steps that are valid now. A new
+      conversation opens with a computed summary of the portal's steps and the moves you can take.
+      The chat runs in its own local service (`pnpm --dir apps/chat start`); the dashboard only
+      shows it. While work runs, the Beetle animation plays.
+    example: Opening the chat on sample-insurer shows "scan done" and proposes picking a process.
+    appears_in: [Chat page]
+    labels: [Chat, conversation]
+    related: [orchestrator, workflow-step, error-reference]
+    changed_in: R-30
+    changed_on: 2026-10-06
+
+  - id: orchestrator
+    term: Orchestrator (assistant)
+    category: beetle
+    group: Chat and workflow
+    short: The assistant behind the chat; it can scan, trace, narrow and document, but cannot change Beetle itself.
+    explanation: |
+      The orchestrator calls the chat tools (`workflow_state`, `request_scan`, `save_persona`, …)
+      and hands the work to the crawler and BA agents. It has no file, shell or web tools: a
+      request to change agents, skills, rules, code, configuration or safety settings is refused
+      and named as a developer task in the shell. Safety-gate refusals are quoted word for word.
+    appears_in: [Chat page]
+    labels: [assistant, orchestrator]
+    related: [chat, persona, run]
+    changed_in: R-30
+    changed_on: 2026-10-06
+
+  - id: workflow-step
+    term: Workflow step
+    category: beetle
+    group: Chat and workflow
+    short: One stage of the work on a portal (scan, map, narrow, document, amend), shown in the step tracker as to do, waiting to start, in progress, done, failed or stopped.
+    explanation: |
+      Statuses come from what was recorded, not from what the assistant says: a scan is in
+      progress while its run is running and done when the run completed. A request shows as
+      "waiting to start" until its run or documentation session appears. A failed step carries an
+      error reference. The tracker is correct after a reload or a restart of the chat service.
+
+      While a scan's run is running, the step shows `[stop scan]`. Stopping (with `[stop scan]`,
+      `[stop]` or by asking the assistant) makes the step **stopped**, not failed: no error
+      reference, what it recorded stays, and `[resume scan]` continues it from the pages still
+      queued with the same choices (read-only or not, images or not).
+    appears_in: [Chat page → step tracker]
+    labels: [step tracker, pending, in progress, failed, stopped, stop scan, resume scan]
+    related: [chat, run, analysis-session, error-reference, scan-choices]
+    changed_in: R-31
+    changed_on: 2026-10-07
+
+  - id: scan-choices
+    term: Scan choices (edits, images)
+    category: beetle
+    group: Chat and workflow
+    short: The two questions the assistant asks before each scan, whether it may fill in and submit forms (default no, only look) and whether to skip images (default no).
+    explanation: |
+      A scan only looks unless you allow edits: then it may fill in and submit forms, on
+      production too, up to the most the environment allows (set in Portal settings). Images load
+      by default because you need them to see what a page asks for; skipping them maps faster on
+      image-heavy sites. A skipped image shows an "Image skipped: images turned off for this
+      scan" box in the screenshot where it would be, and the run's log says why. A resumed scan
+      keeps its choices unless you change them.
+    example: "\"Scan it, you may submit forms, skip images\" → edits allowed, images skipped"
+    appears_in: [Chat page]
+    labels: [read-only, allow edits, skip images, Image skipped]
+    related: [environment, portal-settings, workflow-step, scan-focus]
+    changed_in: R-31
+    changed_on: 2026-10-07
+
+  - id: scan-focus
+    term: Scan focus
+    category: beetle
+    group: Chat and workflow
+    short: The part of a portal one scan or process trace keeps to, said in the chat; where it starts, which addresses and paths it stays within, which paths it leaves out.
+    explanation: |
+      Without a focus a scan maps the whole portal. A focus starts the scan on a given page, keeps
+      it on the hosts and paths you name and never opens the paths you leave out (`*` matches
+      anything). It can only narrow what the portal allows. It belongs to that one run: a resume
+      keeps it, a new scan does not. Links outside it are listed as not done with the reason
+      (`scope:excluded_path` for a left-out path).
+    example: "\"Only the English site, leave out Special: pages\" → start https://en.wikisite.org/, only en.wikisite.org, never /wiki/Special:*"
+    appears_in: [Chat page, Run page → decisions]
+    labels: [focus, scope:excluded_path]
+    related: [scan-choices, portal-scope, persona]
+    changed_in: R-31
+    changed_on: 2026-10-07
+
+  - id: error-reference
+    term: Error reference (ERR-…)
+    category: beetle
+    group: Chat and workflow
+    short: The id shown with every error in the chat; a developer finds the technical detail under it in the local chat log.
+    explanation: |
+      Every failure gets an `ERR-` id (time-ordered, 26 characters after the prefix). The detail
+      goes to `data/logs/chat/<date>.jsonl`, one line per error, kept 30 days and never with
+      credentials in it. Give the reference to a developer instead of a screenshot.
+    example: "The scan step failed (ERR-01K6Z…)."
+    appears_in: [Chat page, step tracker]
+    labels: [ERR-, reference id]
+    related: [chat, workflow-step]
+    changed_in: R-30
+    changed_on: 2026-10-06
+
+  - id: activity-feed
+    term: Activity (scan progress)
+    category: beetle
+    group: Chat and workflow
+    short: The list under the chat of what the conversation's scan did, newest first, with counters for pages found, links queued, steps and time.
+    explanation: |
+      Read from what the crawler recorded, not from the assistant, so it is the same after a
+      reload or after leaving the page. Lines: a new page, one crawler step (`Clicked … on /a →
+      /b`), a form found, a problem (error, a page that never settled, an HTTP error), something
+      not done (with the reason) and a question for the BA. When a running scan records nothing
+      for 5 minutes the chat says so: the crawler may be stuck.
+    example: "17 pages found · 113 still queued · 171 / 400 steps · Clicked link \"Kontakt\" on /logowanie → /kontakt"
+    appears_in: [Chat page]
+    labels: [Activity, pages found, still queued, Nothing recorded for]
+    related: [chat, live-map, run]
+    changed_in: R-30
+    changed_on: 2026-10-06
+
+  - id: live-map
+    term: Map (live)
+    category: beetle
+    group: Chat and workflow
+    short: The pages of the conversation's scan drawn beside the chat as the crawler finds them, each hanging off the page it was reached from.
+    explanation: |
+      A discovery tree: for every page, the link the crawler clicked to reach it first. It does
+      not show every link between pages (that is the state graph on the run's page). Pages found
+      in the last minute and the page the crawler is on are highlighted. It redraws only when
+      something changed and stops when the run ends.
+    example: "/ → (Kontakt) → /kontakt, highlighted as the current page"
+    appears_in: [Chat page]
+    labels: [Map]
+    related: [activity-feed, run]
+    changed_in: R-30
+    changed_on: 2026-10-06
+
+  - id: portal-dropdown
+    term: Portal (dropdown)
+    category: beetle
+    group: Chat and workflow
+    short: The choice at the top of every page of which portal you work on; the pages follow it until you change it.
+    explanation: |
+      Lists the configured portals and every portal that was scanned, plus "all portals" and
+      "+ new portal". With a portal chosen, Overview shows only its runs, Docs opens its
+      documentation and Chat its newest conversation; [new conversation] starts one for it. The
+      choice is remembered by the browser.
+    example: "portal: wikisite-org → the chat opens the wikisite-org conversation"
+    appears_in: [Page header]
+    labels: [portal, all portals]
+    related: [new-portal, environment, chat]
+    changed_in: R-31
+    changed_on: 2026-10-06
+
+  - id: new-portal
+    term: New portal
+    category: beetle
+    group: Chat and workflow
+    short: The form, opened with "+ new portal" in the portal dropdown, that adds a site to work on without editing files.
+    explanation: |
+      Give the address of each environment the site has (production, staging, sandbox; at least
+      one) and how far the crawler may go on each; a short name is proposed from the first
+      address. robots.txt is ignored by default (your responsibility). The limit per environment
+      is the most a scan may ever do there; each scan still only looks unless you allow edits
+      when the assistant asks (see Scan choices). Saving writes the portal's configuration and a guest persona, checked the
+      same way a scan checks them, and opens a chat for it.
+    example: "production https://www.wikisite.org/ (only look) → wikisite-org, then \"scan it\""
+    appears_in: [New portal page, portal dropdown]
+    labels: [+ new portal, robots.txt ignore it]
+    related: [portal-dropdown, portal-settings, portal-scope, persona, scan-choices]
+    changed_in: R-31
+    changed_on: 2026-10-07
+
+  - id: portal-settings
+    term: Portal settings (environments)
+    category: beetle
+    group: Chat and workflow
+    short: The page, opened with [settings] next to the portal dropdown, that lists a portal's environments and adds, changes or revokes them.
+    explanation: |
+      A portal can have a production, a staging and a sandbox environment, each with its own
+      address and how far the crawler may go there. A scan targets one of them (the assistant
+      asks when there are several) and the run records it. Revoking an environment keeps the
+      runs already recorded for it; the last one cannot be revoked. The "data store" switch at
+      the top is something else: which local database the dashboard reads.
+    example: "wikisite-org: production https://www.wikisite.org/ (only look); [revoke] sandbox"
+    appears_in: [Portal settings page, page header]
+    labels: ["[settings]", "[revoke]", production, staging, sandbox]
+    related: [new-portal, portal-dropdown, environment]
+    changed_in: R-31
+    changed_on: 2026-10-06
+
+  - id: reset-assistant
+    term: Reset assistant
+    category: beetle
+    group: Chat and workflow
+    short: Gives the assistant a fresh context in the same conversation; the history stays on screen and the portal and steps are kept.
+    explanation: |
+      The assistant forgets the earlier messages but is told the portal and where the steps
+      stand. Use it when it gets confused or the conversation is long. A new conversation instead
+      starts from zero with its own steps. Refused while the assistant answers: press [stop]
+      first. After a chat-service restart the assistant is also given the last messages, so the
+      conversation carries on.
+    example: "[reset assistant] → \"Assistant context reset. Your next message starts a fresh session…\""
+    appears_in: [Chat page]
+    labels: ["[reset assistant]", "[stop]"]
+    related: [chat, orchestrator]
+    changed_in: R-30
+    changed_on: 2026-10-06
+
+  - id: process-scope
+    term: Process scope
+    category: beetle
+    group: Chat and workflow
+    short: The one process the BA wants documented, given by its start and end screens, the screens in between and a comment per screen.
+    explanation: |
+      Real portals are too big to document whole. The assistant proposes candidates from traced
+      processes, documented processes and matching screens; the BA confirms start, end and the
+      screens in the checklist beside the chat. Documentation then cites only evidence from those
+      screens, and `pnpm docs:export <portal> --scope <id>` exports only that process.
+    appears_in: [Chat page → state checklist, docs:export --scope]
+    labels: [scope, start state, end state]
+    related: [trace-process, state, srs-export]
+    changed_in: R-30
+    changed_on: 2026-10-06
+
+  - id: amendment
+    term: Amendment (to-be)
+    category: beetle
+    group: Chat and workflow
+    short: A BA note on a screen, a piece of evidence or a wireframe element that says what should change; kept apart from the recorded facts.
+    explanation: |
+      An amendment is a text note, a reference to one wireframe element ("this button should
+      say …"), or an attached file. It is stored with author, time and target, never mixed into
+      the as-is records, and exported in its own to-be chapter (`13-to-be-amendments.md`) and in
+      `records.json` with `to_be: true`, so an agent building the new portal can tell as-is from
+      to-be. Keys look like `AMD-001`.
+    appears_in: [Chat page, SRS export → 13-to-be-amendments.md]
+    labels: [AMD-, to-be, amendment]
+    related: [superseded-amendment, wireframe, screen-region, srs-export]
+    changed_in: R-30
+    changed_on: 2026-10-06
+
+  - id: superseded-amendment
+    term: Superseded amendment
+    category: beetle
+    group: Chat and workflow
+    short: An amendment a fresh run made out of date because the screen or element it targets changed; kept, never deleted, until the BA re-applies or dismisses it.
+    explanation: |
+      After a run the BA started finishes, Beetle checks every active amendment against what
+      the run saw: same address but a different screen (`state_replaced`), the targeted element
+      renamed (`element_changed`) or gone (`element_removed`). A screen the run did not visit
+      leaves its amendments active. Superseded ones are listed in "Superseded amendments" with
+      reason, run and time; re-apply creates a new active copy on a current screen, dismiss
+      retires it. Exports list them in `appendix-superseded-amendments.md`.
+    appears_in: [Superseded amendments view, appendix-superseded-amendments.md]
+    labels: [superseded, re-apply, dismiss]
+    related: [amendment, run]
+    changed_in: R-30
+    changed_on: 2026-10-06
+
+  # ---- Beetle: building Beetle (R-34) -----------------------------------------------------
+  - id: fast-tier
+    term: Fast tier
+    category: beetle
+    group: Building Beetle
+    short: The crawler tests that run on every commit, in seconds — only the ones your uncommitted change can affect, without browser end-to-end files and gates.
+    explanation: |
+      `pnpm test:fast` in `apps/crawler` asks Vitest which test files import, directly or through
+      other packages, a file you changed, and runs only those. A change to something the import
+      graph cannot see (a test harness, fixtures, a migration, a portal or persona file, a config)
+      runs the whole fast tier instead, still in about 10 seconds. The commit hook runs it.
+    example: "tier: fast (affected) — a one-line change in the fingerprint package runs the tests of fingerprint, crawler and mcp-server that use it."
+    appears_in: [pnpm test:fast, the commit hook]
+    labels: [test:fast, "tier: fast"]
+    related: [slow-tier, quality-gate]
+    changed_in: R-34
+    changed_on: 2026-10-07
+
+  - id: slow-tier
+    term: Slow tier
+    category: beetle
+    group: Building Beetle
+    short: The browser end-to-end test files (`*.e2e.test.ts`) and the whole gate set, run before committing runtime or gate changes and before a merge.
+    explanation: |
+      `pnpm test:slow` runs two things at once: the files that drive whole crawler runs through
+      the MCP server with a real browser, and every quality gate including the slow ones against
+      the demo site (ports 4200/4201). It takes about three minutes. `pnpm test` still runs
+      everything and is the check before a merge.
+    appears_in: [pnpm test:slow, CLAUDE.md "Verification Before Commit"]
+    labels: [test:slow, e2e, "*.e2e.test.ts"]
+    related: [fast-tier, slow-gate, quality-gate]
+    changed_in: R-34
+    changed_on: 2026-10-07
+
+  - id: code-guidelines
+    term: Code guidelines
+    category: beetle
+    group: Building Beetle
+    short: The rated rules (G-01 to G-32) for how Beetle's code is shaped, layered, tested and reviewed, in `docs/code-guidelines.md`.
+    explanation: |
+      Each guideline has an id, the rule, why it exists and what checks it (a lint rule, a test or
+      the code reviewer). They were proposed as a list and rated by the project owner before any
+      refactor, so they hold only rules the owner accepted. Reviews cite the ids.
+    example: "G-21: every async call is awaited, returned, or explicitly voided with a reason."
+    appears_in: [docs/code-guidelines.md, CLAUDE.md "Code Guidelines"]
+    labels: [G-01, guideline]
+    related: [agent-notes]
+    changed_in: R-34
+    changed_on: 2026-10-07
+
+  - id: agent-notes
+    term: Agent notes
+    category: beetle
+    group: Building Beetle
+    short: The short `CLAUDE.md` in every package and app that tells an AI agent (and a person) what the package is for, its layer, public API, rules and where to add things.
+    explanation: |
+      Claude Code reads a folder's `CLAUDE.md` when it works there, so these notes are the first
+      thing an agent sees. They hold facts only (about 60 lines at most), follow one template and
+      change in the same commit as the code they describe (guideline G-30).
+    appears_in: ["apps/*/CLAUDE.md", "apps/crawler/packages/*/CLAUDE.md", packages/workflow/CLAUDE.md]
+    labels: [CLAUDE.md]
+    related: [code-guidelines]
+    changed_in: R-34
+    changed_on: 2026-10-07
+
+  - id: mutation-testing
+    term: Mutation testing
+    category: beetle
+    group: Building Beetle
+    short: A check of the tests themselves — the code is changed in small ways on purpose and every change the tests do not notice is a gap in the tests.
+    explanation: |
+      Each small change is a "mutant" (a `>` turned into `>=`, a condition forced true, a
+      statement removed). Killed means a test failed, as it should; survived means no test noticed.
+      The score is the share of mutants killed. It runs on demand, never on every commit:
+      `pnpm mutate` for the crawler's core packages, `uv run mutmut run` for the dashboard.
+    example: "safety: 929 mutants, 717 killed, 211 survived — 77.3 %."
+    appears_in: [pnpm mutate, data/mutation/stryker/<package>/report.html, uv run mutmut results]
+    labels: [mutant, mutation score, survived, killed, Stryker, mutmut]
+    related: [fast-tier, behaviour-lock]
+    changed_in: R-34
+    changed_on: 2026-10-08
+
+  - id: behaviour-lock
+    term: Behaviour lock
+    category: beetle
+    group: Building Beetle
+    short: A test that records exactly what the code does today, so a refactor can prove it changed nothing.
+    explanation: |
+      Before code is moved or split, the lock captures its observable result; after every step
+      the lock must still match. The crawl pipeline's lock runs a map run and a trace run and
+      compares the recorded states, edges, decision log and trace spans with a committed snapshot.
+    appears_in: [tests/pipeline-golden.e2e.test.ts, docs/code-guidelines.md G-29]
+    labels: [golden test, snapshot]
+    related: [code-guidelines, slow-tier]
+    changed_in: R-34
+    changed_on: 2026-10-08
+
+  - id: doung-beatle
+    term: doung-beatle (field artifact)
+    category: beetle
+    group: Building Beetle
+    short: A generated, stripped and renamed copy of the crawler and BA for Kiro CLI, used to try Beetle on real portals where only Kiro is available.
+    explanation: |
+      `pnpm --dir apps/beetle-export export` builds it from master into a separate local repository:
+      only the crawler and BA servers, their packages and the field commands, with the project
+      name replaced by "beetle", the read-only dashboard (without Chat), Kiro agents (beetle,
+      crawler, ba, reporter), skills and a steering file. No chat, evals, hooks or tracing. It is never edited by hand: fixes are made
+      here and carried out by the next export. A marker file records which commit it came from;
+      the field's own portals, personas, issues and data are never touched by an export.
+    example: "export: harness 668505a2352b → /home/tester/projects/doung-beatle, 532 files, verified."
+    appears_in: [apps/beetle-export, specs/018-doung-beatle]
+    labels: [doung-beatle, beetle, field artifact, beetle-export]
+    related: [field-issue]
+    changed_in: R-49
+    changed_on: 2026-10-11
+
+  - id: field-issue
+    term: Field issue
+    category: beetle
+    group: Building Beetle
+    short: One problem found while using doung-beatle on a real portal, written as one file by its reporter agent and imported here for triage.
+    explanation: |
+      The reporter agent writes `issues/BI-<date>-<nn>-<slug>.md`: area, severity, portal, run and
+      evidence ids, then symptom, steps, expected, actual and a suggested test or eval.
+      `pnpm --dir apps/beetle-export import-issues` copies new valid ones to `docs/field-issues/`
+      and adds a row to its index; triage turns them into roadmap items, findings or tasks.
+    example: BI-20261012-01-crawler-stuck-on-cookie-banner, area crawler, severity blocker.
+    appears_in: [docs/field-issues/README.md, specs/018-doung-beatle/contracts/field-issue.md]
+    labels: [field issue, BI-]
+    related: [doung-beatle]
+    changed_in: R-49
+    changed_on: 2026-10-11

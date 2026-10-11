@@ -10,13 +10,26 @@ are never touched by an update.
 
 ## Install
 
-Needs Node 22+, pnpm and Kiro CLI.
+Needs Node 22+, pnpm and Kiro CLI; the dashboard also needs Python 3.13 and uv.
 
 ```sh
 pnpm install
 pnpm --dir apps/crawler/packages/crawler exec playwright install chromium
 pnpm --dir apps/crawler test        # optional: unit tests, no network
+(cd apps/dashboard && uv sync)
 ```
+
+## Dashboard: check what came in
+
+```sh
+cd apps/dashboard && uv run beetle-dashboard     # http://127.0.0.1:8765
+```
+
+Overview of runs, every screen the crawler recorded with its screenshot, actions and their safety
+class, the frontier and what was refused or skipped, forms, network calls, the decision log, and
+the Docs tab with the BA's records. Pick the environment (store) in the header. To review records
+from the Docs tab, start it with `BEETLE_REVIEWER="<your name>"`. It only reads; it is safe to keep
+open while a run is going (it updates live).
 
 ## Start
 
