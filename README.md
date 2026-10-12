@@ -80,7 +80,7 @@ All under `pnpm --dir apps/crawler`:
 
 ## License
 
-Proprietary. Copyright © 2026 Tester Gałęziewski. All rights reserved. This is not open-source
+Proprietary. Copyright © 2026 Dawid Gałęziewski. All rights reserved. This is not open-source
 software: no use, copying, modification or distribution without written permission, and no use
 for AI or machine-learning training or text and data mining (rights reserved under Article 4(3)
 of Directive (EU) 2019/790). See [`LICENSE`](LICENSE); third-party files keep their own licences
