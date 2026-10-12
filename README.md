@@ -77,3 +77,11 @@ All under `pnpm --dir apps/crawler`:
 | `portal:export <portal>` / `portal:delete <portal> --env e --operator <name>` | copy out / remove a portal's recorded data |
 | `wireframes:build <portal>` | redraw the wireframes of recorded screens |
 | `audit:pii` | look for unmasked personal data in the store |
+
+## License
+
+Proprietary. Copyright © 2026 Tester Gałęziewski. All rights reserved. This is not open-source
+software: no use, copying, modification or distribution without written permission, and no use
+for AI or machine-learning training or text and data mining (rights reserved under Article 4(3)
+of Directive (EU) 2019/790). See [`LICENSE`](LICENSE); third-party files keep their own licences
+([`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)).
