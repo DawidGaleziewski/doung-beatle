@@ -283,6 +283,9 @@ importers:
       '@beetle/docs-model':
         specifier: workspace:*
         version: link:../docs-model
+      '@beetle/fingerprint':
+        specifier: workspace:*
+        version: link:../fingerprint
       '@beetle/store':
         specifier: workspace:*
         version: link:../store

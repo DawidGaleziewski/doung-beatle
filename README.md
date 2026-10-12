@@ -85,4 +85,3 @@ software: no use, copying, modification or distribution without written permissi
 for AI or machine-learning training or text and data mining (rights reserved under Article 4(3)
 of Directive (EU) 2019/790). See [`LICENSE`](LICENSE); third-party files keep their own licences
 ([`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)).
-# doung-beatle
