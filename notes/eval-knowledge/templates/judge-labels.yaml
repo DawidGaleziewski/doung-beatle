@@ -1,0 +1,70 @@
+# Labels for judge rules-stated. The question you are answering (the same one the judge gets):
+#   Does this documentation record state the given business rule, with the same limits and
+#   conditions, as something the portal does?
+# For each pair: set label to pass or fail and write one sentence in why.
+# Add hard pairs real output lacks with source: hand-made (any unique id).
+# Never label from the judge: these labels are what the judge is measured against.
+# split: dev pairs may become few-shot examples and are used to refine the wording;
+#        test pairs are judged once, at the end, and never shown to the judge.
+judge: rules-stated
+pairs:
+  - id: R01~BR-004@1
+    split: dev
+    source: data/db/sandbox.sqlite#sample-insurer
+    item: |-
+      rule: The driver must be between 18 and 75 years old on the calculation date.
+      where: S09 / Data urodzenia
+    record:
+      key: BR-004
+      rev: 1
+      text: |-
+        title: Driver age limit
+        statement: The calculator accepts drivers aged 18 to 75 on the calculation date.
+        confidence: observed
+    label: pass
+    why: Same limits, same subject, same reference date.
+
+  - id: R01~hand-1
+    split: dev
+    source: hand-made
+    item: |-
+      rule: The driver must be between 18 and 75 years old on the calculation date.
+      where: S09 / Data urodzenia
+    record:
+      key: BR-X1
+      rev: 1
+      text: |-
+        title: Driver age
+        statement: Driver age is NOT limited to 18–75; any adult can be insured.
+    label: fail
+    why: States the opposite; a marker match on "18" and "75" would pass it.
+
+  - id: R01~hand-2
+    split: test
+    source: hand-made
+    item: |-
+      rule: The driver must be between 18 and 75 years old on the calculation date.
+      where: S09 / Data urodzenia
+    record:
+      key: BR-X2
+      rev: 1
+      text: |-
+        title: Driver age
+        statement: Is there an age limit for the driver? Unclear from the form.
+    label: fail
+    why: Poses the rule as an open question, does not state it.
+
+  - id: R01~hand-3
+    split: test
+    source: hand-made
+    item: |-
+      rule: The driver must be between 18 and 75 years old on the calculation date.
+      where: S09 / Data urodzenia
+    record:
+      key: BR-X3
+      rev: 1
+      text: |-
+        title: Driver age
+        statement: Drivers must be adults and at most 75 when the premium is calculated.
+    label: pass
+    why: Adult = 18 in this market; same upper limit and date, other words.
